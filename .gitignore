@@ -32,3 +32,6 @@ brainbot
 
 # Output files
 *.json
+
+# Chroma database data
+chroma_data/
