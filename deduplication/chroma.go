@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 )
 
 // Chroma wraps the Chroma vector database REST API
@@ -70,14 +69,13 @@ func NewChroma(config ChromaConfig) (*Chroma, error) {
 		embeddingModel: embeddingModel,
 	}
 
-	// Initialize an embeddings provider if configured (e.g., OpenAI)
-	// This allows us to use query_embeddings as expected by Chroma v2.
-	if os.Getenv("OPENAI_API_KEY") != "" {
-		wrapper.embedder = NewDefaultEmbeddingsProvider(wrapper.embeddingModel)
-		if wrapper.embedder != nil {
-			log.Printf("Using embeddings provider: %s", wrapper.embedder.ModelName())
-		}
+	// Initialize an embeddings provider (required for Chroma v2 REST API)
+	// Chroma v2 expects client-supplied embeddings (query_embeddings, embeddings).
+	wrapper.embedder = NewDefaultEmbeddingsProvider(wrapper.embeddingModel)
+	if wrapper.embedder == nil {
+		return nil, fmt.Errorf("no embeddings provider configured. Set COHERE_API_KEY or OPENAI_API_KEY (and optionally embedding model) to enable client-side embeddings required by Chroma v2")
 	}
+	log.Printf("Using embeddings provider: %s", wrapper.embedder.ModelName())
 
 	// Get or create collection
 	collectionID, err := wrapper.getOrCreateCollection(config.CollectionName)
@@ -181,14 +179,15 @@ func (c *Chroma) AddDocument(doc Document) error {
 		"ids":       ids,
 	}
 
-	// If we have an embedder, generate embeddings client-side to comply with Chroma v2
-	if c.embedder != nil {
-		embs, err := c.embedder.EmbedTexts(documents)
-		if err != nil {
-			return fmt.Errorf("failed to generate embeddings: %w", err)
-		}
-		payload["embeddings"] = embs
+	// Generate embeddings client-side to comply with Chroma v2
+	if c.embedder == nil {
+		return fmt.Errorf("embeddings provider not configured")
 	}
+	embs, err := c.embedder.EmbedTexts(documents)
+	if err != nil {
+		return fmt.Errorf("failed to generate embeddings: %w", err)
+	}
+	payload["embeddings"] = embs
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -233,13 +232,14 @@ func (c *Chroma) AddDocuments(docs []Document) error {
 		"ids":       ids,
 	}
 
-	if c.embedder != nil {
-		embs, err := c.embedder.EmbedTexts(documents)
-		if err != nil {
-			return fmt.Errorf("failed to generate embeddings: %w", err)
-		}
-		payload["embeddings"] = embs
+	if c.embedder == nil {
+		return fmt.Errorf("embeddings provider not configured")
 	}
+	embs, err := c.embedder.EmbedTexts(documents)
+	if err != nil {
+		return fmt.Errorf("failed to generate embeddings: %w", err)
+	}
+	payload["embeddings"] = embs
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -270,16 +270,14 @@ func (c *Chroma) QuerySimilar(queryText string, nResults int) (*QueryResults, er
 		"include": []string{"metadatas", "documents", "distances", "embeddings", "uris"},
 	}
 
-	if c.embedder != nil {
-		embs, err := c.embedder.EmbedTexts([]string{queryText})
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate query embeddings: %w", err)
-		}
-		payload["query_embeddings"] = embs
-	} else {
-		// Fallback to server-side embeddings only if collection has an embedding function configured
-		payload["query_texts"] = []string{queryText}
+	if c.embedder == nil {
+		return nil, fmt.Errorf("embeddings provider not configured")
 	}
+	embs, err := c.embedder.EmbedTexts([]string{queryText})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate query embeddings: %w", err)
+	}
+	payload["query_embeddings"] = embs
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -314,15 +312,14 @@ func (c *Chroma) QuerySimilarWithMetadata(queryText string, nResults int, where 
 		"include":   []string{"metadatas", "documents", "distances", "embeddings", "uris"},
 	}
 
-	if c.embedder != nil {
-		embs, err := c.embedder.EmbedTexts([]string{queryText})
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate query embeddings: %w", err)
-		}
-		payload["query_embeddings"] = embs
-	} else {
-		payload["query_texts"] = []string{queryText}
+	if c.embedder == nil {
+		return nil, fmt.Errorf("embeddings provider not configured")
 	}
+	embs, err := c.embedder.EmbedTexts([]string{queryText})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate query embeddings: %w", err)
+	}
+	payload["query_embeddings"] = embs
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {

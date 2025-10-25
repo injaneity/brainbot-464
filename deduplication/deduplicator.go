@@ -187,10 +187,16 @@ func (d *Deduplicator) AddArticle(article *types.Article) error {
 		"published_at":      article.PublishedAt.Format(time.RFC3339),
 		"fetched_at":        article.FetchedAt.Format(time.RFC3339),
 		"author":            article.Author,
-		"categories":        article.Categories,
 		"last_retrieved_at": currentTime.Format(time.RFC3339),
 		"last_update":       currentTime.Format(time.RFC3339),
 		"added_at":          currentTime.Format(time.RFC3339),
+	}
+
+	// Chroma v2 REST API may not support arbitrary array types in metadata.
+	// Store categories as a comma-separated string when present to avoid
+	// deserialization errors.
+	if len(article.Categories) > 0 {
+		metadata["categories"] = strings.Join(article.Categories, ", ")
 	}
 
 	// Create document for Chroma

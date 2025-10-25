@@ -8,12 +8,19 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	// Initialize logging
 	log.SetOutput(os.Stderr)
 	log.Println("=== BrainBot RSS Feed Deduplicator ===")
+
+	// Load environment variables from .env if present (non-fatal if missing)
+	if err := godotenv.Load(); err == nil {
+		log.Println("Loaded environment variables from .env")
+	}
 
 	// Step 1: Fetch RSS feed using existing rssfeeds package
 	feedURL := rssfeeds.ResolveFeedURL(rssfeeds.DefaultFeedPreset)
