@@ -2,11 +2,17 @@ package deduplication
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"time"
+
+	cohere "github.com/cohere-ai/cohere-go/v2"
+	cohereclient "github.com/cohere-ai/cohere-go/v2/client"
 )
 
 // EmbeddingsProvider abstracts a text->embedding generator
@@ -19,6 +25,17 @@ type EmbeddingsProvider interface {
 // NewDefaultEmbeddingsProvider returns an embeddings provider if configured via env
 // Currently supports OpenAI when OPENAI_API_KEY is set.
 func NewDefaultEmbeddingsProvider(preferredModel string) EmbeddingsProvider {
+	// Prefer Cohere if configured
+	if cohereKey := os.Getenv("COHERE_API_KEY"); cohereKey != "" {
+		model := preferredModel
+		if model == "" || !strings.HasPrefix(model, "embed-") {
+			// Reasonable default for Cohere v3 embeddings; choose english by default
+			model = "embed-english-v3.0"
+		}
+		client := cohereclient.NewClient(cohereclient.WithToken(cohereKey))
+		return &CohereEmbeddings{client: client, model: model}
+	}
+
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey != "" {
 		model := preferredModel
@@ -29,6 +46,63 @@ func NewDefaultEmbeddingsProvider(preferredModel string) EmbeddingsProvider {
 		return &OpenAIEmbeddings{apiKey: apiKey, model: model}
 	}
 	return nil
+}
+
+// CohereEmbeddings implements EmbeddingsProvider using the Cohere Embed API (v2)
+// Docs: https://docs.cohere.com/reference/embed
+// SDK: github.com/cohere-ai/cohere-go/v2
+type CohereEmbeddings struct {
+	client *cohereclient.Client
+	model  string
+}
+
+func (c *CohereEmbeddings) ModelName() string { return c.model }
+
+func (c *CohereEmbeddings) EmbedTexts(texts []string) ([][]float32, error) {
+	if len(texts) == 0 {
+		return [][]float32{}, nil
+	}
+
+	// Use a short per-request timeout to avoid hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// For v3 models, InputType is required. We use search_document consistently
+	// for both documents and queries to keep a single vector space.
+	req := &cohere.EmbedRequest{
+		Texts:          texts,
+		Model:          &c.model,
+		InputType:      cohere.EmbedInputTypeSearchDocument.Ptr(),
+		EmbeddingTypes: []cohere.EmbeddingType{cohere.EmbeddingTypeFloat},
+	}
+
+	resp, err := c.client.Embed(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("cohere embed error: %w", err)
+	}
+	if resp == nil {
+		return nil, errors.New("cohere embed returned empty response")
+	}
+
+	var floats [][]float64
+	if byType := resp.GetEmbeddingsByType(); byType != nil && byType.Embeddings != nil {
+		floats = byType.Embeddings.GetFloat()
+	} else if f := resp.GetEmbeddingsFloats(); f != nil {
+		floats = f.GetEmbeddings()
+	}
+	if len(floats) != len(texts) {
+		return nil, errors.New("embedding count mismatch")
+	}
+
+	out := make([][]float32, len(floats))
+	for i, vec := range floats {
+		fv := make([]float32, len(vec))
+		for j, v := range vec {
+			fv[j] = float32(v)
+		}
+		out[i] = fv
+	}
+	return out, nil
 }
 
 // OpenAIEmbeddings implements EmbeddingsProvider using the OpenAI Embeddings API

@@ -35,3 +35,6 @@ brainbot
 
 # Chroma database data
 chroma_data/
+
+# Environment 
+.env
