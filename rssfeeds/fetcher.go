@@ -1,14 +1,16 @@
-package main
+package rssfeeds
 
 import (
 	"fmt"
 	"time"
 
+	types "brainbot/types"
+
 	"github.com/mmcdole/gofeed"
 )
 
 // FetchFeed retrieves and parses an RSS/Atom feed, returning article metadata
-func FetchFeed(feedURL string, maxCount int) ([]*Article, error) {
+func FetchFeed(feedURL string, maxCount int) ([]*types.Article, error) {
 	parser := gofeed.NewParser()
 	feed, err := parser.ParseURL(feedURL)
 	if err != nil {
@@ -16,7 +18,7 @@ func FetchFeed(feedURL string, maxCount int) ([]*Article, error) {
 	}
 
 	count := min(len(feed.Items), maxCount)
-	articles := make([]*Article, 0, count)
+	articles := make([]*types.Article, 0, count)
 
 	for i := 0; i < count; i++ {
 		item := feed.Items[i]
@@ -24,7 +26,7 @@ func FetchFeed(feedURL string, maxCount int) ([]*Article, error) {
 		// Use GUID if available, otherwise generate from URL
 		id := item.GUID
 		if id == "" && item.Link != "" {
-			id = GenerateID(item.Link)
+			id = types.GenerateID(item.Link)
 		}
 
 		// Parse published date
@@ -51,7 +53,7 @@ func FetchFeed(feedURL string, maxCount int) ([]*Article, error) {
 			summary = item.Content
 		}
 
-		article := &Article{
+		article := &types.Article{
 			ID:          id,
 			Title:       item.Title,
 			URL:         item.Link,

@@ -1,6 +1,7 @@
-package main
+package rssfeeds
 
 import (
+	"brainbot/types"
 	"fmt"
 	"log"
 	"sync"
@@ -10,17 +11,17 @@ import (
 )
 
 const (
-	workerCount      = 5
+	WorkerCount      = 5
 	extractorTimeout = 30 * time.Second
 )
 
 // ExtractAllContent fetches and extracts full content for all articles using a worker pool
-func ExtractAllContent(articles []*Article) {
+func ExtractAllContent(articles []*types.Article) {
 	var wg sync.WaitGroup
-	articleChan := make(chan *Article, len(articles))
+	articleChan := make(chan *types.Article, len(articles))
 
 	// Start worker pool
-	for i := 0; i < workerCount; i++ {
+	for i := 0; i < WorkerCount; i++ {
 		go func(workerID int) {
 			for article := range articleChan {
 				if err := extractContent(article); err != nil {
@@ -44,7 +45,7 @@ func ExtractAllContent(articles []*Article) {
 }
 
 // extractContent fetches and extracts full content for a single article
-func extractContent(article *Article) error {
+func extractContent(article *types.Article) error {
 	if article.URL == "" {
 		return fmt.Errorf("article URL is empty")
 	}
