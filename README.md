@@ -13,18 +13,18 @@ Ingest RSS feeds, extract full article content, deduplicate using a vector datab
 
 ## Quick start
 
-1) Start ChromaDB (required for deduplication):
+1. Start ChromaDB (required for deduplication):
 
 ```bash
 docker compose up -d
 ```
 
-2) Provide an embeddings provider (pick one):
+2. Provide an embeddings provider (pick one):
 
 - Cohere: set COHERE_API_KEY
 - OpenAI: set OPENAI_API_KEY (optional OPENAI_ORG_ID)
 
-3) Build and run the API:
+3. Build and run the API:
 
 ```bash
 go mod download
@@ -68,18 +68,21 @@ On startup, one orchestrator run fetches a preset feed, extracts, deduplicates, 
 ## Local development
 
 Prereqs
+
 - Go 1.24+
 - Docker (for ChromaDB)
 
 Run
+
 ```bash
-docker compose up -d   
-export COHERE_API_KEY=...   
+docker compose up -d
+export COHERE_API_KEY=...
 go build -o brainbot .
-./brainbot                   
+./brainbot
 ```
 
 Quick checks
+
 ```bash
 curl -s http://localhost:8080/api/health
 curl -s -X POST http://localhost:8080/api/rss/refresh
@@ -88,49 +91,31 @@ curl -s "http://localhost:8080/api/chroma/articles?limit=10"
 
 ## Docker Compose
 
-This repo includes a `docker-compose.yml` with two services:
-- `chroma` — ChromaDB vector database (with healthcheck)
-- `app` — BrainBot API server (waits for Chroma to be healthy)
+The repository provides a simple `docker-compose.yml` that starts a local
+ChromaDB instance used by the application for vector storage. If you need a
+multi-container development environment that includes Redis (with RedisBloom)
+for integration testing, see `docker-compose.test.yml` (added for CI/local
+tests).
 
-1) Create a `.env` file at the repo root to configure the app container:
-
-```dotenv
-COHERE_API_KEY=
-
-AWS_ACCESS_KEY = 
-AWS_SECRET_ACCESS_KEY = 
-
-S3_BUCKET=
-S3_REGION=
-
-RUN_ORCHESTRATOR_ON_STARTUP=false
-```
-
-2) Build and start everything:
+To run the (minimal) Chroma service defined in `docker-compose.yml`:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-3) Watch logs and verify health:
+If you want to run the full application in Docker Compose, add an `app` service
+to the compose file (or create a separate compose override) that builds and
+runs the `brainbot` binary and depends on the `chroma` service.
+
+To run the integration test harness (Chroma + Redis Stack including RedisBloom):
 
 ```bash
-docker compose logs -f app
-curl -s http://localhost:8080/api/health
+./scripts/test-integration.sh
 ```
 
-4) List services and status:
-
-```bash
-docker compose ps
-```
-
-5) Stop and clean up:
+To stop and clean up (compose or test harness):
 
 ```bash
 docker compose down
-# or to remove volumes (clears local Chroma data)
-docker compose down -v
+docker compose -f docker-compose.test.yml down -v --remove-orphans
 ```
-
-
