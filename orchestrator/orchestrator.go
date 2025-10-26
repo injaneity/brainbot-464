@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,7 +132,7 @@ func uploadArticleToS3(ctx context.Context, s3c *common.S3, bucket, prefix strin
 
 	// Build sanitized payload (remove images + strip <img> from HTML)
 	payload := map[string]interface{}{
-		"id":          a.ID,
+		"id":           a.ID,
 		"title":        a.Title,
 		"url":          a.URL,
 		"published_at": a.PublishedAt,
@@ -163,10 +164,26 @@ func stripImagesFromHTML(html string) string {
 }
 
 func initializeDeduplicator() (*deduplication.Deduplicator, error) {
+	// Allow overriding Chroma connection via env for containerized deployments
+	host := strings.TrimSpace(os.Getenv("CHROMA_HOST"))
+	if host == "" {
+		host = "localhost"
+	}
+	port := 8000
+	if v := strings.TrimSpace(os.Getenv("CHROMA_PORT")); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			port = p
+		}
+	}
+	collection := strings.TrimSpace(os.Getenv("CHROMA_COLLECTION"))
+	if collection == "" {
+		collection = "brainbot_articles"
+	}
+
 	chromaConfig := deduplication.ChromaConfig{
-		Host:           "localhost",
-		Port:           8000,
-		CollectionName: "brainbot_articles",
+		Host:           host,
+		Port:           port,
+		CollectionName: collection,
 		EmbeddingModel: "",
 	}
 
