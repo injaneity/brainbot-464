@@ -10,14 +10,16 @@ set -euo pipefail
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.test.yml"
 
-echo "Starting test services via docker-compose..."
-docker compose -f "$COMPOSE_FILE" up -d
+echo "Starting Redis test service via docker-compose..."
+# Start only the redis service to exercise RedisBloom functionality
+docker compose -f "$COMPOSE_FILE" up -d --build redis
 
 function teardown() {
   echo "Tearing down test services..."
   docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
 }
 trap teardown EXIT
+
 
 echo "Waiting for Redis to be ready..."
 # Wait until redis-cli PING returns PONG inside the redis container
