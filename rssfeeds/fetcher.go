@@ -22,11 +22,16 @@ func FetchFeed(feedURL string, maxCount int) ([]*types.Article, error) {
 
 	for i := 0; i < count; i++ {
 		item := feed.Items[i]
-
-		// Use GUID if available, otherwise generate from URL
-		id := item.GUID
-		if id == "" && item.Link != "" {
-			id = types.GenerateID(item.Link)
+		// Always use a generated hash as the article ID (not the URL or GUID)
+		var id string
+		if item.Link != "" {
+			id = GenerateID(item.Link)
+		} else if item.GUID != "" {
+			// Fallback: hash the GUID if link is missing
+			id = GenerateID(item.GUID)
+		} else if item.Title != "" {
+			// Last resort: hash the title
+			id = GenerateID(item.Title)
 		}
 
 		// Parse published date
