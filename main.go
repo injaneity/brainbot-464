@@ -1,12 +1,17 @@
 package main
 
 import (
+	"brainbot/common"
 	"brainbot/deduplication"
 	"brainbot/rssfeeds"
 	"brainbot/types"
+	"bytes"
+	"context"
 	"encoding/json"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -55,14 +60,105 @@ func main() {
 	log.Println("Deduplicator initialized successfully")
 	log.Printf("Similarity threshold: %.2f%%", deduplication.SimilarityThreshold*100)
 
+	// Step 2b: Initialize optional S3 client (uploads are skipped if not configured)
+	s3Client, s3Bucket, s3Prefix := initializeS3()
+
 	// Step 3: Process articles through deduplication
 	log.Println("Processing articles for deduplication...")
 	results := processArticles(articles, deduplicator)
 
+	// Step 3b: Upload non-duplicate articles to S3 (without images) if configured
+	if s3Client != nil && s3Bucket != "" {
+		log.Printf("Uploading new articles to S3 bucket %q with prefix %q", s3Bucket, s3Prefix)
+		uploaded := 0
+		for i, r := range results {
+			if r.Status != "new" || r.Article == nil {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := uploadArticleToS3(ctx, s3Client, s3Bucket, s3Prefix, r.Article)
+			cancel()
+			if err != nil {
+				log.Printf("  [%d] S3 upload failed for %s: %v", i+1, r.Article.ID, err)
+				continue
+			}
+			uploaded++
+		}
+		log.Printf("S3 uploads complete: %d item(s)", uploaded)
+	} else {
+		log.Printf("S3 not configured; skipping uploads")
+	}
+
 	// Step 4: Display results
-	displayResults(results, articles)
+	displayResults(results, articles) // Summary logs only
 
 	log.Println("=== Processing Complete ===")
+}
+
+
+// initializeS3 returns an S3 client and target bucket/prefix if configured via env.
+// Required: S3_BUCKET. Optional: S3_REGION, S3_PROFILE, S3_PREFIX, S3_USE_PATH_STYLE=true
+func initializeS3() (*common.S3, string, string) {
+	bucket := strings.TrimSpace(os.Getenv("S3_BUCKET"))
+	if bucket == "" {
+		return nil, "", ""
+	}
+
+	cfg := common.S3Config{
+		Region:       strings.TrimSpace(os.Getenv("S3_REGION")),
+		Profile:      strings.TrimSpace(os.Getenv("S3_PROFILE")),
+		UsePathStyle: strings.EqualFold(strings.TrimSpace(os.Getenv("S3_USE_PATH_STYLE")), "true"),
+	}
+	client, err := common.NewS3(context.Background(), cfg)
+	if err != nil {
+		log.Printf("Warning: failed to init S3 client: %v (uploads disabled)", err)
+		return nil, "", ""
+	}
+
+	prefix := strings.TrimSpace(os.Getenv("S3_PREFIX"))
+	if prefix != "" {
+		prefix = strings.Trim(prefix, "/") + "/"
+	}
+	return client, bucket, prefix
+}
+
+// uploadArticleToS3 writes a sanitized JSON record of the article (without images) to S3.
+func uploadArticleToS3(ctx context.Context, s3c *common.S3, bucket, prefix string, a *types.Article) error {
+	if a == nil {
+		return nil
+	}
+
+	// Build sanitized payload (remove images + strip <img> from HTML)
+	payload := map[string]interface{}{
+		"id":           a.ID,
+		"title":        a.Title,
+		"url":          a.URL,
+		"published_at": a.PublishedAt,
+		"fetched_at":   a.FetchedAt,
+		"summary":      a.Summary,
+		"author":       a.Author,
+		"categories":   a.Categories,
+		"excerpt":      a.Excerpt,
+		"full_content": stripImagesFromHTML(a.FullContent),
+		"content_text": a.FullContentText,
+	}
+
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	key := prefix + "articles/" + a.ID + ".json"
+	return s3c.Put(ctx, bucket, key, bytes.NewReader(b), "application/json", "public, max-age=300", "")
+}
+
+var imgTagRe = regexp.MustCompile(`(?i)<img\b[^>]*>`)
+
+func stripImagesFromHTML(html string) string {
+	if strings.TrimSpace(html) == "" {
+		return html
+	}
+	return imgTagRe.ReplaceAllString(html, "")
 }
 
 func initializeDeduplicator() (*deduplication.Deduplicator, error) {
@@ -160,17 +256,7 @@ func displayResults(results []ArticleResult, articles []*types.Article) {
 	log.Printf("Failed Articles:    %d", failedArticles)
 	log.Println("=============================")
 
-	// Output detailed results as JSON to stdout
-	output := ProcessingOutput{
-		ProcessedAt: time.Now(),
-		Results:     results,
-	}
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(output); err != nil {
-		log.Fatalf("Failed to encode JSON output: %v", err)
-	}
+	// Removed detailed JSON output to avoid printing article metadata
 }
 
 // ArticleResult represents the processing result for a single article
@@ -181,8 +267,4 @@ type ArticleResult struct {
 	Error               string                             `json:"error,omitempty"`
 }
 
-// ProcessingOutput is the complete output structure
-type ProcessingOutput struct {
-	ProcessedAt time.Time       `json:"processed_at"`
-	Results     []ArticleResult `json:"results"`
-}
+// Removed detailed JSON output types to avoid printing article metadata
