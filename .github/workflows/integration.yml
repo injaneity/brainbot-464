@@ -3,8 +3,6 @@ name: CI — Unit & Integration Tests
 on:
   push:
     branches: [main, master, "**"]
-  pull_request:
-    branches: [main, master]
 
 jobs:
   test:
@@ -24,6 +22,9 @@ jobs:
         image: chromadb/chroma:latest
         ports:
           - 8000:8000
+        env:
+          IS_PERSISTENT: "false"
+          ANONYMIZED_TELEMETRY: "false"
         options: >-
           --health-cmd "curl -f http://localhost:8000/ || exit 1"
           --health-interval 5s
