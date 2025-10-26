@@ -1,8 +1,6 @@
 package types
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"time"
 )
 
@@ -29,10 +27,4 @@ type FeedResult struct {
 	FetchedAt    time.Time  `json:"fetched_at"`
 	ArticleCount int        `json:"article_count"`
 	Articles     []*Article `json:"articles"`
-}
-
-// GenerateID creates a unique ID from URL
-func GenerateID(url string) string {
-	hash := sha256.Sum256([]byte(url))
-	return hex.EncodeToString(hash[:])[:16]
 }

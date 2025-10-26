@@ -69,13 +69,12 @@ func NewChroma(config ChromaConfig) (*Chroma, error) {
 		embeddingModel: embeddingModel,
 	}
 
-	// Initialize an embeddings provider (required for Chroma v2 REST API)
-	// Chroma v2 expects client-supplied embeddings (query_embeddings, embeddings).
+	// Initialize an embeddings provider (required for Chroma v2 REST API when adding/querying)
+	// For read-only operations (get/count), embedder is not required.
 	wrapper.embedder = NewDefaultEmbeddingsProvider(wrapper.embeddingModel)
-	if wrapper.embedder == nil {
-		return nil, fmt.Errorf("no embeddings provider configured. Set COHERE_API_KEY or OPENAI_API_KEY (and optionally embedding model) to enable client-side embeddings required by Chroma v2")
+	if wrapper.embedder != nil {
+		log.Printf("Using embeddings provider: %s", wrapper.embedder.ModelName())
 	}
-	log.Printf("Using embeddings provider: %s", wrapper.embedder.ModelName())
 
 	// Get or create collection
 	collectionID, err := wrapper.getOrCreateCollection(config.CollectionName)
@@ -83,6 +82,30 @@ func NewChroma(config ChromaConfig) (*Chroma, error) {
 		return nil, fmt.Errorf("failed to get or create collection: %w", err)
 	}
 
+	wrapper.collectionID = collectionID
+	return wrapper, nil
+}
+
+// NewChromaReadOnly creates a Chroma wrapper instance without requiring an embeddings provider.
+// Useful for read-only endpoints (e.g., listing or getting documents) where embeddings are not needed.
+func NewChromaReadOnly(config ChromaConfig) (*Chroma, error) {
+	baseURL := fmt.Sprintf("http://%s:%d/api/v2", config.Host, config.Port)
+
+	wrapper := &Chroma{
+		baseURL:        baseURL,
+		tenant:         "default_tenant",
+		database:       "default_database",
+		collectionName: config.CollectionName,
+		httpClient:     &http.Client{},
+		embeddingModel: getDefaultEmbeddingModel(config.EmbeddingModel),
+		embedder:       nil, // explicitly nil; not needed for read-only methods
+	}
+
+	// Get or create collection
+	collectionID, err := wrapper.getOrCreateCollection(config.CollectionName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create collection: %w", err)
+	}
 	wrapper.collectionID = collectionID
 	return wrapper, nil
 }
@@ -374,6 +397,86 @@ func (c *Chroma) GetDocument(id string) (*GetResults, error) {
 	}
 
 	return &result, nil
+}
+
+// ListDocuments retrieves documents with optional pagination. When limit is 0, the server default is used.
+// Offset can be used to paginate through the collection.
+func (c *Chroma) ListDocuments(limit int, offset int) (*GetResults, error) {
+	url := fmt.Sprintf("%s/get", c.collectionURL())
+	// Note: omit 'where' entirely to list all documents; an empty object can be rejected by Chroma.
+	payload := map[string]interface{}{
+		// 'ids' is always returned by Chroma and is not a valid value for 'include'
+		// Valid include values: distances, documents, embeddings, metadatas, uris
+		"include": []string{"metadatas", "documents"},
+	}
+	if limit > 0 {
+		payload["limit"] = limit
+	}
+	if offset > 0 {
+		payload["offset"] = offset
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list documents: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list documents: %s", string(body))
+	}
+
+	// Read body to detect Chroma error envelopes even when status is 200
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if ce := parseChromaError(data); ce != nil {
+		return nil, fmt.Errorf("failed to list documents: %w", ce)
+	}
+
+	var result GetResults
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse list response: %w; body: %s", err, string(data))
+	}
+	return &result, nil
+}
+
+// parseChromaError inspects a response body for Chroma's error envelope returned with HTTP 200
+//
+//	{
+//	  "error": "InvalidArgumentError",
+//	  "message": "Invalid where clause"
+//	}
+func parseChromaError(body []byte) error {
+	// Fast path: look for a leading '{' to avoid trying to parse non-JSON
+	if len(body) == 0 || body[0] != '{' {
+		return nil
+	}
+	var probe struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return nil
+	}
+	if probe.Error != "" || probe.Message != "" {
+		if probe.Error != "" && probe.Message != "" {
+			return fmt.Errorf("%s: %s", probe.Error, probe.Message)
+		}
+		if probe.Error != "" {
+			return fmt.Errorf(probe.Error)
+		}
+		return fmt.Errorf(probe.Message)
+	}
+	return nil
 }
 
 // DeleteDocument removes a document by ID

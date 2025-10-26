@@ -1,76 +1,39 @@
-package main
+package orchestrator
 
 import (
+	"brainbot/common"
+	"brainbot/deduplication"
+	"brainbot/rssfeeds"
+	"brainbot/types"
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
-	"net/http"
 	"os"
+	"regexp"
 	"strings"
-
-	"brainbot/api"
-	"brainbot/orchestrator"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
-func main() {
+// RunOnce executes a single end-to-end cycle: fetch RSS, extract, deduplicate, optional S3 upload, summary.
+func RunOnce(ctx context.Context) error {
+	// Initialize logging
+	log.SetOutput(os.Stderr)
+	log.Println("=== BrainBot Orchestrator ===")
+
 	// Load environment variables from .env if present (non-fatal if missing)
 	_ = godotenv.Load()
 
-	addr := ":8080"
-	if v := os.Getenv("PORT"); v != "" {
-		addr = ":" + v
-	}
+	// Step 1: Fetch RSS feed using existing rssfeeds package
+	feedURL := rssfeeds.ResolveFeedURL(rssfeeds.DefaultFeedPreset)
+	log.Printf("Fetching RSS feed: %s", feedURL)
 
-	// Start one orchestrator run in the background at startup (configurable)
-	if isTrueEnv("RUN_ORCHESTRATOR_ON_STARTUP", true) {
-		go func() {
-			if err := orchestrator.RunOnce(context.Background()); err != nil {
-				log.Printf("orchestrator run failed: %v", err)
-			}
-		}()
-	} else {
-		log.Printf("RUN_ORCHESTRATOR_ON_STARTUP is disabled; skipping startup run")
-	}
-
-	r := api.NewRouter()
-	log.Printf("Starting API server on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
-}
-
-// isTrueEnv returns a boolean from an environment variable with common truthy/falsey parsing.
-// If the variable is unset or unrecognized, it falls back to def.
-func isTrueEnv(name string, def bool) bool {
-	v := strings.TrimSpace(os.Getenv(name))
-	if v == "" {
-		return def
-	}
-	v = strings.ToLower(v)
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return def
-	}
-}
-
-/*
-	r := api.NewRouter()	feedURL := rssfeeds.ResolveFeedURL(rssfeeds.DefaultFeedPreset)
-
-	log.Printf("Starting API server on %s", addr)	log.Printf("Fetching RSS feed: %s", feedURL)
-
-	if err := http.ListenAndServe(addr, r); err != nil {
-
-		log.Fatalf("server error: %v", err)	articles, err := rssfeeds.FetchFeed(feedURL, rssfeeds.DefaultCount)
-
-	}	if err != nil {
-
-}		log.Fatalf("Failed to fetch articles: %v", err)
-
+	articles, err := rssfeeds.FetchFeed(feedURL, rssfeeds.DefaultCount)
+	if err != nil {
+		return fmt.Errorf("failed to fetch articles: %w", err)
 	}
 	log.Printf("Fetched %d articles from feed", len(articles))
 
@@ -90,7 +53,7 @@ func isTrueEnv(name string, def bool) bool {
 	log.Println("Initializing deduplication service...")
 	deduplicator, err := initializeDeduplicator()
 	if err != nil {
-		log.Fatalf("Failed to initialize deduplicator: %v", err)
+		return fmt.Errorf("failed to initialize deduplicator: %w", err)
 	}
 	defer deduplicator.Close()
 
@@ -112,8 +75,9 @@ func isTrueEnv(name string, def bool) bool {
 			if r.Status != "new" || r.Article == nil {
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			err := uploadArticleToS3(ctx, s3Client, s3Bucket, s3Prefix, r.Article)
+			// Short timeout per upload
+			uctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			err := uploadArticleToS3(uctx, s3Client, s3Bucket, s3Prefix, r.Article)
 			cancel()
 			if err != nil {
 				log.Printf("  [%d] S3 upload failed for %s: %v", i+1, r.Article.ID, err)
@@ -126,10 +90,11 @@ func isTrueEnv(name string, def bool) bool {
 		log.Printf("S3 not configured; skipping uploads")
 	}
 
-	// Step 4: Display results
-	displayResults(results, articles) // Summary logs only
+	// Step 4: Display results (summary only)
+	displayResults(results, articles)
 
-	log.Println("=== Processing Complete ===")
+	log.Println("=== Orchestrator Run Complete ===")
+	return nil
 }
 
 // initializeS3 returns an S3 client and target bucket/prefix if configured via env.
@@ -166,7 +131,7 @@ func uploadArticleToS3(ctx context.Context, s3c *common.S3, bucket, prefix strin
 
 	// Build sanitized payload (remove images + strip <img> from HTML)
 	payload := map[string]interface{}{
-		"id":           a.ID,
+		"id":          a.ID,
 		"title":        a.Title,
 		"url":          a.URL,
 		"published_at": a.PublishedAt,
@@ -291,8 +256,6 @@ func displayResults(results []ArticleResult, articles []*types.Article) {
 	log.Printf("Duplicate Articles: %d", duplicateArticles)
 	log.Printf("Failed Articles:    %d", failedArticles)
 	log.Println("=============================")
-
-	// Removed detailed JSON output to avoid printing article metadata
 }
 
 // ArticleResult represents the processing result for a single article
@@ -302,6 +265,3 @@ type ArticleResult struct {
 	DeduplicationResult *deduplication.DeduplicationResult `json:"deduplication_result,omitempty"`
 	Error               string                             `json:"error,omitempty"`
 }
-
-// Removed detailed JSON output types to avoid printing article metadata
-*/
