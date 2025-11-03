@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: brainbot-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',8000)); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: brainbot-app
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      chroma:
+        condition: service_healthy
+    restart: unless-stopped
+
