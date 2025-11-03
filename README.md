@@ -41,28 +41,53 @@ On startup, one orchestrator run fetches a preset feed, extracts, deduplicates, 
 - GET /api/chroma/articles?limit=&offset= — list stored documents from the Chroma collection
 - POST /articles — accept a posted Article and echo normalized identifiers (utility endpoint)
 
+## Interactive Demo
+
+Try the **interactive terminal UI demo** that showcases the complete integration between the RSS/deduplication service and the generation service:
+
+```bash
+# Quick start - runs setup checks
+./demo/setup-check.sh
+
+# Run the demo
+go run ./cmd/demo/main.go
+```
+
+The demo:
+1. Fetches latest articles from RSS feeds
+2. Extracts full content
+3. Deduplicates using ChromaDB
+4. Sends new articles to the generation service
+5. Receives and displays results via webhook
+
+See [demo/README.md](demo/README.md) for full details.
+
 ## Components overview
 
-- rssfeeds/
+- **rssfeeds/** — RSS feed fetching and content extraction
   - config.go — feed presets and defaults
   - fetcher.go — fetch/parse feeds (gofeed)
   - extractor.go — readability extraction with worker pool
   - utils.go — ID generation (sha256 short hash)
-- deduplication/
+- **deduplication/** — Vector-based duplicate detection
   - embeddings.go — Cohere or OpenAI embeddings client (selected by env)
   - chroma.go — minimal Chroma v2 REST wrapper (collections, add/query/get/list/update/delete)
   - deduplicator.go — similarity search, TTL metadata maintenance, duplicate detection
-- orchestrator/
+- **orchestrator/** — End-to-end pipeline coordination
   - orchestrator.go — end-to-end run: fetch → extract → deduplicate → optional S3 upload → summary
-- api/
+- **api/** — HTTP API server
   - server.go — route registration (Gin)
   - healthcontroller.go — health endpoint
   - rsscontroller.go — trigger refresh (POST)
   - chromacontroller.go — read/list documents from Chroma
   - articlescontroller.go — utility POST for articles
-- common/
+- **generation_service/** — Python service for AI content generation
+  - FastAPI service that generates scripts, audio, and subtitles
+- **cmd/demo/** — Interactive terminal UI demo
+  - Demonstrates full integration flow with webhook support
+- **common/** — Shared utilities
   - s3.go — thin wrapper over AWS SDK v2 S3 client
-- types/
+- **types/** — Data models
   - article.go — Article and FeedResult models
 
 ## Local development

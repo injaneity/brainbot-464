@@ -569,6 +569,51 @@ func (c *Chroma) CheckSimilarity(content string, threshold float32, maxResults i
 	return results, nil
 }
 
+// ClearCollection deletes all documents from the collection
+func (c *Chroma) ClearCollection() error {
+	// Get all document IDs
+	results, err := c.ListDocuments(0, 10000) // Get up to 10k documents
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	if len(results.IDs) == 0 {
+		log.Println("Collection is already empty")
+		return nil
+	}
+
+	// Delete all documents
+	url := fmt.Sprintf("%s/delete", c.collectionURL())
+	payload := map[string]interface{}{
+		"ids": results.IDs,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to clear collection: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to clear collection (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	log.Printf("Cleared %d documents from collection", len(results.IDs))
+	return nil
+}
+
 // Close cleans up the wrapper (if needed)
 func (c *Chroma) Close() error {
 	// The chroma-go client doesn't seem to have an explicit close method
