@@ -472,9 +472,9 @@ func parseChromaError(body []byte) error {
 			return fmt.Errorf("%s: %s", probe.Error, probe.Message)
 		}
 		if probe.Error != "" {
-			return fmt.Errorf(probe.Error)
+			return fmt.Errorf("%s", probe.Error)
 		}
-		return fmt.Errorf(probe.Message)
+		return fmt.Errorf("%s", probe.Message)
 	}
 	return nil
 }

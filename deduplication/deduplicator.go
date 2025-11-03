@@ -39,6 +39,7 @@ type Deduplicator struct {
 	vector              VectorClient
 	similarityThreshold float32
 	maxSearchResults    int
+	bloom               *RedisBloom
 }
 
 // DeduplicatorConfig holds configuration for the deduplicator
@@ -46,6 +47,8 @@ type DeduplicatorConfig struct {
 	ChromaConfig        ChromaConfig
 	SimilarityThreshold float32 // Default: 0.95 (95%)
 	MaxSearchResults    int     // Default: 5
+	// Optional Bloom filter configuration. If nil, Bloom checks are disabled.
+	BloomConfig *BloomConfig
 }
 
 // NewDeduplicator creates a new instance of the deduplicator
@@ -58,10 +61,21 @@ func NewDeduplicator(config DeduplicatorConfig) (*Deduplicator, error) {
 		return nil, fmt.Errorf("failed to initialize Chroma: %w", err)
 	}
 
+	// Initialize RedisBloom if configured
+	var bloomClient *RedisBloom
+	if cfg.BloomConfig != nil {
+		b, err := NewRedisBloom(*cfg.BloomConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize RedisBloom: %w", err)
+		}
+		bloomClient = b
+	}
+
 	return &Deduplicator{
 		vector:              chroma,
 		similarityThreshold: cfg.SimilarityThreshold,
 		maxSearchResults:    cfg.MaxSearchResults,
+		bloom:               bloomClient,
 	}, nil
 }
 
@@ -73,16 +87,45 @@ func NewDeduplicatorWithClient(client VectorClient, config DeduplicatorConfig) (
 
 	cfg := applyConfigDefaults(config)
 
+	var bloomClient *RedisBloom
+	if cfg.BloomConfig != nil {
+		b, err := NewRedisBloom(*cfg.BloomConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize RedisBloom: %w", err)
+		}
+		bloomClient = b
+	}
+
 	return &Deduplicator{
 		vector:              client,
 		similarityThreshold: cfg.SimilarityThreshold,
 		maxSearchResults:    cfg.MaxSearchResults,
+		bloom:               bloomClient,
 	}, nil
 }
 
 // CheckForDuplicates checks if the given article is a duplicate of existing articles
 func (d *Deduplicator) CheckForDuplicates(article *types.Article) (*DeduplicationResult, error) {
 	checkTime := time.Now()
+
+	// Fast-path: check probabilistic exact-duplicate filter (URL+title hash)
+	if d.bloom != nil {
+		if hash, err := NormalizeAndHash(article); err == nil {
+			exists, err := d.bloom.Exists(hash)
+			if err != nil {
+				// Log and continue with vector check on failure to query bloom
+				log.Printf("Warning: bloom check failed: %v", err)
+			} else if exists {
+				// Probable exact duplicate detected within TTL window
+				return &DeduplicationResult{
+					IsDuplicate: true,
+					CheckedAt:   checkTime,
+				}, nil
+			}
+		} else {
+			log.Printf("Warning: failed to compute bloom hash: %v", err)
+		}
+	}
 
 	// Extract full text content for embedding
 	content := d.extractFullText(article)
@@ -210,6 +253,17 @@ func (d *Deduplicator) AddArticle(article *types.Article) error {
 	err := d.vector.AddDocument(doc)
 	if err != nil {
 		return fmt.Errorf("failed to add article to vector database: %w", err)
+	}
+
+	// Add to probabilistic bloom filter (optional)
+	if d.bloom != nil {
+		if hash, err := NormalizeAndHash(article); err == nil {
+			if err := d.bloom.Add(hash); err != nil {
+				log.Printf("Warning: failed to add article to bloom filter: %v", err)
+			}
+		} else {
+			log.Printf("Warning: failed to compute bloom hash for add: %v", err)
+		}
 	}
 
 	log.Printf("Added article %s to vector database", article.ID)
@@ -362,7 +416,19 @@ func (d *Deduplicator) CleanupOldArticles() error {
 
 // Close closes the deduplicator and cleans up resources
 func (d *Deduplicator) Close() error {
-	return d.vector.Close()
+	var err1 error
+	if d.vector != nil {
+		err1 = d.vector.Close()
+	}
+	if d.bloom != nil {
+		if err := d.bloom.Close(); err != nil {
+			if err1 != nil {
+				return fmt.Errorf("vector close error: %v; bloom close error: %w", err1, err)
+			}
+			return err
+		}
+	}
+	return err1
 }
 
 func applyConfigDefaults(config DeduplicatorConfig) DeduplicatorConfig {
