@@ -70,3 +70,14 @@ require (
 	golang.org/x/tools v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
 )
+module brainbot
+
+go 1.24
+
+toolchain go1.24.9
+
+require (
+    github.com/u2takey/ffmpeg-go v0.5.0
+    golang.org/x/oauth2 v0.24.0
+    google.golang.org/api v0.203.0
+)
