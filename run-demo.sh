@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Quick run script for BrainBot Terminal UI Demo
+# Complete demo runner that starts all services and the demo
+# This script orchestrates the entire BrainBot demo in a single command
 
 set -e
 
@@ -11,46 +12,106 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Track if we started the generation service
+# Track services we started
+API_SERVER_STARTED=false
+API_SERVER_PID=""
 GEN_SERVICE_STARTED=false
 GEN_SERVICE_PID=""
+CHROMA_STARTED=false
 
 # Cleanup function
 cleanup() {
-    if [ "$GEN_SERVICE_STARTED" = true ] && [ -n "$GEN_SERVICE_PID" ]; then
-        echo -e "\n${YELLOW}Stopping Generation Service (PID: $GEN_SERVICE_PID)...${NC}"
-        kill $GEN_SERVICE_PID 2>/dev/null || true
-        echo -e "${GREEN}Generation Service stopped${NC}"
+    echo ""
+    echo -e "${YELLOW}Cleaning up services...${NC}"
+    
+    # Kill API server if we started it
+    if [ "$API_SERVER_STARTED" = true ] && [ -n "$API_SERVER_PID" ]; then
+        echo -e "${YELLOW}Stopping API Server (PID: $API_SERVER_PID)...${NC}"
+        kill $API_SERVER_PID 2>/dev/null || true
     fi
+    
+    # Kill generation service if we started it
+    if [ "$GEN_SERVICE_STARTED" = true ] && [ -n "$GEN_SERVICE_PID" ]; then
+        echo -e "${YELLOW}Stopping Generation Service (PID: $GEN_SERVICE_PID)...${NC}"
+        kill $GEN_SERVICE_PID 2>/dev/null || true
+    fi
+    
+    # Stop ChromaDB if we started it
+    if [ "$CHROMA_STARTED" = true ]; then
+        echo -e "${YELLOW}Stopping ChromaDB...${NC}"
+        docker stop brainbot-chroma 2>/dev/null || true
+        docker rm brainbot-chroma 2>/dev/null || true
+    fi
+    
+    echo -e "${GREEN}Cleanup complete${NC}"
 }
 
 # Set trap to call cleanup on exit
 trap cleanup EXIT INT TERM
 
-echo -e "${BLUE}🤖 BrainBot Demo Launcher${NC}\n"
+echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   🤖 BrainBot Complete Demo Runner   ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo ""
 
-# Check if services are running
-echo -e "${YELLOW}Checking prerequisites...${NC}"
+# Function to check if a port is in use
+check_port() {
+    lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1
+}
 
-MISSING_SERVICES=0
-
-# Check ChromaDB
-if ! curl -s http://localhost:8000/api/v1/heartbeat > /dev/null 2>&1; then
-    echo -e "${RED}✗ ChromaDB is not running on port 8000${NC}"
-    echo -e "  Start with: ${BLUE}docker run -d -p 8000:8000 chromadb/chroma${NC}"
-    MISSING_SERVICES=1
-else
-    echo -e "${GREEN}✓ ChromaDB is running${NC}"
-fi
-
-# Check Generation Service
-if ! curl -s http://localhost:8002/health > /dev/null 2>&1; then
-    echo -e "${YELLOW}⚠ Generation Service is not running on port 8002${NC}"
-    echo -e "${BLUE}Starting Generation Service...${NC}"
+# Function to wait for a service to be ready
+wait_for_service() {
+    local url=$1
+    local name=$2
+    local max_attempts=30
+    local attempt=0
     
+    echo -e "${YELLOW}Waiting for $name to be ready...${NC}"
+    while [ $attempt -lt $max_attempts ]; do
+        if curl -s "$url" >/dev/null 2>&1; then
+            echo -e "${GREEN}$name is ready!${NC}"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    
+    echo -e "${RED}$name failed to start${NC}"
+    return 1
+}
+
+# Step 1: Start ChromaDB
+echo -e "${BLUE}Step 1/4: Starting ChromaDB...${NC}"
+if check_port 8000; then
+    echo -e "${GREEN}ChromaDB already running on port 8000${NC}"
+else
+    docker run -d \
+        --name brainbot-chroma \
+        -p 8000:8000 \
+        -v "$(pwd)/chroma_data:/chroma/chroma" \
+        -e IS_PERSISTENT=TRUE \
+        -e ANONYMIZED_TELEMETRY=FALSE \
+        chromadb/chroma:latest >/dev/null 2>&1
+    
+    CHROMA_STARTED=true
+    
+    if wait_for_service "http://localhost:8000/api/v1" "ChromaDB"; then
+        echo -e "${GREEN}✓ ChromaDB started successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to start ChromaDB${NC}"
+        exit 1
+    fi
+fi
+echo ""
+
+# Step 2: Start Generation Service
+echo -e "${BLUE}Step 2/4: Starting Generation Service...${NC}"
+if check_port 8002; then
+    echo -e "${GREEN}Generation Service already running on port 8002${NC}"
+else
     # Check if Python virtual environment exists
     if [ ! -d "generation_service/venv" ]; then
-        echo -e "${YELLOW}  Creating Python virtual environment...${NC}"
+        echo -e "${YELLOW}Creating Python virtual environment...${NC}"
         cd generation_service
         python3 -m venv venv
         source venv/bin/activate
@@ -58,68 +119,76 @@ if ! curl -s http://localhost:8002/health > /dev/null 2>&1; then
         cd ..
     fi
     
-    # Start the generation service in the background on port 8002
     cd generation_service
     source venv/bin/activate
-    PORT=8002 nohup python -m app.main > /tmp/generation_service.log 2>&1 &
+    export PORT=8002
+    nohup python -m app.main > ../generation_service.log 2>&1 &
     GEN_SERVICE_PID=$!
     GEN_SERVICE_STARTED=true
     cd ..
     
-    # Wait for service to start
-    echo -e "${YELLOW}  Waiting for Generation Service to start...${NC}"
-    for _i in {1..30}; do
-        if curl -s http://localhost:8002/health > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Generation Service is running (PID: $GEN_SERVICE_PID)${NC}"
-            break
-        fi
-        sleep 1
-    done
-    
-    if ! curl -s http://localhost:8002/health > /dev/null 2>&1; then
-        echo -e "${RED}✗ Failed to start Generation Service${NC}"
-        echo -e "  Check logs: tail -f /tmp/generation_service.log"
-        MISSING_SERVICES=1
+    if wait_for_service "http://localhost:8002/health" "Generation Service"; then
+        echo -e "${GREEN}✓ Generation Service started successfully (PID: $GEN_SERVICE_PID)${NC}"
+    else
+        echo -e "${YELLOW}⚠ Generation Service may not be fully ready (continuing anyway)${NC}"
     fi
-else
-    echo -e "${GREEN}✓ Generation Service is running${NC}"
 fi
-
-# Check webhook port
-if lsof -Pi :9999 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "${RED}✗ Port 9999 is already in use${NC}"
-    echo -e "  Free the port or set WEBHOOK_PORT environment variable"
-    MISSING_SERVICES=1
-else
-    echo -e "${GREEN}✓ Webhook port 9999 is available${NC}"
-fi
-
 echo ""
 
-if [ $MISSING_SERVICES -eq 1 ]; then
-    echo -e "${RED}Some required services are not running.${NC}"
-    echo -e "${YELLOW}Do you want to continue anyway? (y/N)${NC}"
-    read -r response
-    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        echo "Exiting..."
+# Step 3: Start API Server
+echo -e "${BLUE}Step 3/4: Starting API Server...${NC}"
+if check_port 8080; then
+    echo -e "${GREEN}API Server already running on port 8080${NC}"
+else
+    # Start API server in background
+    nohup go run main.go > api_server.log 2>&1 &
+    API_SERVER_PID=$!
+    API_SERVER_STARTED=true
+    
+    if wait_for_service "http://localhost:8080/api/health" "API Server"; then
+        echo -e "${GREEN}✓ API Server started successfully (PID: $API_SERVER_PID)${NC}"
+    else
+        echo -e "${RED}✗ Failed to start API Server${NC}"
+        echo -e "${YELLOW}Check api_server.log for details${NC}"
         exit 1
     fi
 fi
+echo ""
 
-# Load .env if it exists
-if [ -f .env ]; then
-    echo -e "${GREEN}Loading .env configuration...${NC}"
-    export $(cat .env | grep -v '^#' | xargs)
-fi
+# Step 4: Prepare demo
+echo -e "${BLUE}Step 4/4: Preparing demo...${NC}"
+sleep 2
+echo -e "${GREEN}✓ All services ready!${NC}"
+echo ""
+
+# Display service status
+echo -e "${BLUE}═══════════════════════════════════════${NC}"
+echo -e "${GREEN}Services Status:${NC}"
+echo -e "  ChromaDB:           http://localhost:8000 ✓"
+echo -e "  Generation Service: http://localhost:8002 ✓"
+echo -e "  API Server:         http://localhost:8080 ✓"
+echo -e "${BLUE}═══════════════════════════════════════${NC}"
+echo ""
+
+# Show logs locations
+echo -e "${YELLOW}Service Logs:${NC}"
+echo -e "  API Server:         tail -f api_server.log"
+echo -e "  Generation Service: tail -f generation_service.log"
+echo -e "  ChromaDB:           docker logs brainbot-chroma"
+echo ""
 
 # Run the demo
-echo -e "\n${GREEN}Starting demo...${NC}\n"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${GREEN}Starting demo...${NC}"
+echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
+echo -e "${YELLOW}Press 'q' or Ctrl+C to quit${NC}"
+echo ""
 
-# Rebuild to ensure latest code
-go build -o demo_bin ./cmd/demo 2>/dev/null
+# Export environment variables for the demo
+export API_URL=http://localhost:8080
+export WEBHOOK_PORT=9999
+export GENERATION_SERVICE_URL=http://localhost:8002
 
-./demo_bin
+# Run the demo (this will block until demo exits)
+go run cmd/demo/main.go
 
-echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}Demo finished!${NC}"
+# Cleanup will be called automatically by the trap

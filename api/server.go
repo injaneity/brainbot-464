@@ -13,6 +13,7 @@ func NewRouter() *gin.Engine {
 	// Register resource routers
 	RegisterArticleRoutes(r)
 	RegisterChromaRoutes(r)
+	RegisterDeduplicationRoutes(r)
 	RegisterHealthRoutes(r)
 	RegisterRSSRoutes(r)
 	return r
