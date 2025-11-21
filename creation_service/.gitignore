@@ -1,0 +1,12 @@
+# Input/Output/Background video files
+inputs/*
+!inputs/.gitkeep
+outputs/*
+!outputs/.gitkeep
+backgroundvids/*
+!backgroundvids/.gitkeep
+
+# Compiled binaries
+creation_service
+test_video_generation
+*.exe
