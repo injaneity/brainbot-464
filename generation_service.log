@@ -1,0 +1,392 @@
+/Users/zanechee/Documents/projects/github/brainbot-464/generation_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Will watch for changes in these directories: ['/Users/zanechee/Documents/projects/github/brainbot-464/generation_service']
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+INFO:     Started reloader process [53777] using StatReload
+/Users/zanechee/Documents/projects/github/brainbot-464/generation_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [53787]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:56760 - "GET /health HTTP/1.1" 200 OK
+[2025-11-21 13:23:36] [INFO] [N/A] Received generate request: 0352ba01-557a-4d47-b3d4-1bbb3cbe50fe
+[2025-11-21 13:23:36] [INFO] [N/A] Request 0352ba01-557a-4d47-b3d4-1bbb3cbe50fe accepted for processing
+INFO:     127.0.0.1:56832 - "POST /generate HTTP/1.1" 202 Accepted
+[2025-11-21 13:23:36] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Starting generation pipeline
+[2025-11-21 13:23:36] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Target: 30s (60 words @ 120 WPM)
+[2025-11-21 13:23:36] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Step 1: Generating script with Gemini
+[2025-11-21 13:23:36] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] AFC is enabled with max remote calls: 10.
+[2025-11-21 13:23:50] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+[2025-11-21 13:23:50] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Script generated (445 chars, 66 words) in 13.85s
+[2025-11-21 13:23:50] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Step 2: Generating audio with Fal.ai ElevenLabs
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] HTTP Request: POST https://fal.run/fal-ai/elevenlabs/tts/eleven-v3 "HTTP/1.1 200 OK"
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Fal.ai TTS response received successfully
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Audio generated successfully. Timestamp count: 17
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Audio generated in 15.78s
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Received 17 character-level timestamp entries from Fal.ai
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Step 3: Converting character-level timestamps to word-level format
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Converted to 68 word-level timestamps
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Step 4: Resource timing (placeholder)
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Step 5: Sending webhook
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Webhook payload: {
+  "uuid": "0352ba01-557a-4d47-b3d4-1bbb3cbe50fe",
+  "voiceover": "https://v3b.fal.media/files/b/penguin/2ncNDc3X4ZruPd-x4kixQ_output.mp3",
+  "subtitle_timestamps": [
+    {
+      "text": "A",
+      "start": 0.0,
+      "end": 0.08
+    },
+    {
+      "text": "couple",
+      "start": 0.125,
+      "end": 0.395
+    },
+    {
+      "text": "was",
+      "start": 0.455,
+      "end": 0.635
+    },
+    {
+      "text": "jailed",
+      "start": 0.6920000000000001,
+      "end": 1.034
+    },
+    {
+      "text": "and",
+      "start": 1.054,
+      "end": 1.1139999999999999
+    },
+    {
+      "text": "fined",
+      "start": 1.2069999999999999,
+      "end": 1.672
+    },
+    {
+      "text": "for",
+      "start": 1.7119999999999997,
+      "end": 1.8319999999999999
+    },
+    {
+      "text": "illegally",
+      "start": 1.896,
+      "end": 2.472
+    },
+    {
+      "text": "breeding",
+      "start": 2.516,
+      "end": 2.868
+    },
+    {
+      "text": "Rag",
+      "start": 2.948,
+      "end": 3.1879999999999997
+    },
+    {
+      "text": "doll",
+      "start": 3.1879999999999997,
+      "end": 3.428
+    },
+    {
+      "text": "cats,",
+      "start": 3.5239999999999996,
+      "end": 4.068
+    },
+    {
+      "text": "selling",
+      "start": 4.108,
+      "end": 4.388
+    },
+    {
+      "text": "30",
+      "start": 4.548,
+      "end": 4.788
+    },
+    {
+      "text": "kittens.",
+      "start": 4.858,
+      "end": 5.508
+    },
+    {
+      "text": "Singapore",
+      "start": 5.66,
+      "end": 7.0280000000000005
+    },
+    {
+      "text": "imposed",
+      "start": 7.098000000000001,
+      "end": 7.588000000000001
+    },
+    {
+      "text": "sanctions",
+      "start": 7.636,
+      "end": 8.068000000000001
+    },
+    {
+      "text": "on",
+      "start": 8.148,
+      "end": 8.308
+    },
+    {
+      "text": "four",
+      "start": 8.372,
+      "end": 8.628
+    },
+    {
+      "text": "Israelis",
+      "start": 8.690000000000001,
+      "end": 9.186
+    },
+    {
+      "text": "over",
+      "start": 9.234,
+      "end": 9.426
+    },
+    {
+      "text": "extremist",
+      "start": 9.49,
+      "end": 10.066
+    },
+    {
+      "text": "violence",
+      "start": 10.119,
+      "end": 10.543
+    },
+    {
+      "text": "in",
+      "start": 10.596,
+      "end": 10.702
+    },
+    {
+      "text": "the",
+      "start": 10.722,
+      "end": 10.782
+    },
+    {
+      "text": "West",
+      "start": 10.846,
+      "end": 11.102
+    },
+    {
+      "text": "Bank.",
+      "start": 11.166,
+      "end": 11.582
+    },
+    {
+      "text": "PM",
+      "start": 12.035,
+      "end": 12.941
+    },
+    {
+      "text": "Wong",
+      "start": 13.021,
+      "end": 13.341000000000001
+    },
+    {
+      "text": "is",
+      "start": 13.367,
+      "end": 13.419
+    },
+    {
+      "text": "attending",
+      "start": 13.467,
+      "end": 13.899000000000001
+    },
+    {
+      "text": "the",
+      "start": 13.919,
+      "end": 13.979000000000001
+    },
+    {
+      "text": "G-20",
+      "start": 14.099,
+      "end": 14.619
+    },
+    {
+      "text": "summit",
+      "start": 14.664,
+      "end": 14.934
+    },
+    {
+      "text": "in",
+      "start": 14.959999999999999,
+      "end": 15.012
+    },
+    {
+      "text": "South",
+      "start": 15.078,
+      "end": 15.408
+    },
+    {
+      "text": "Africa",
+      "start": 15.465,
+      "end": 15.807
+    },
+    {
+      "text": "and",
+      "start": 15.866999999999999,
+      "end": 16.047
+    },
+    {
+      "text": "visiting",
+      "start": 16.1,
+      "end": 16.524
+    },
+    {
+      "text": "Ethiopia",
+      "start": 16.604,
+      "end": 17.244
+    },
+    {
+      "text": ".",
+      "start": 17.244,
+      "end": 17.404
+    },
+    {
+      "text": "SMRT’s",
+      "start": 17.857,
+      "end": 19.243
+    },
+    {
+      "text": "Bishan",
+      "start": 19.283,
+      "end": 19.801
+    },
+    {
+      "text": "Depot",
+      "start": 19.866999999999997,
+      "end": 20.197
+    },
+    {
+      "text": "completed",
+      "start": 20.253,
+      "end": 20.756999999999998
+    },
+    {
+      "text": "a",
+      "start": 20.837,
+      "end": 20.916999999999998
+    },
+    {
+      "text": "$7",
+      "start": 20.997,
+      "end": 21.237
+    },
+    {
+      "text": "million",
+      "start": 21.337,
+      "end": 22.037
+    },
+    {
+      "text": "automation",
+      "start": 22.087,
+      "end": 22.587
+    },
+    {
+      "text": "upgrade,",
+      "start": 22.657,
+      "end": 23.547
+    },
+    {
+      "text": "doubling",
+      "start": 23.599999999999998,
+      "end": 24.024
+    },
+    {
+      "text": "train",
+      "start": 24.09,
+      "end": 24.419999999999998
+    },
+    {
+      "text": "overhaul",
+      "start": 24.473,
+      "end": 24.897
+    },
+    {
+      "text": "capacity.",
+      "start": 24.968,
+      "end": 25.695999999999998
+    },
+    {
+      "text": "AI",
+      "start": 26.201999999999998,
+      "end": 27.214
+    },
+    {
+      "text": "is",
+      "start": 27.293999999999997,
+      "end": 27.453999999999997
+    },
+    {
+      "text": "now",
+      "start": 27.493999999999996,
+      "end": 27.613999999999997
+    },
+    {
+      "text": "greatly",
+      "start": 27.683999999999997,
+      "end": 28.173999999999996
+    },
+    {
+      "text": "influencing",
+      "start": 28.226999999999997,
+      "end": 28.81
+    },
+    {
+      "text": "wedding",
+      "start": 28.849999999999998,
+      "end": 29.129999999999995
+    },
+    {
+      "text": "planning,",
+      "start": 29.182999999999996,
+      "end": 30.006999999999998
+    },
+    {
+      "text": "making",
+      "start": 30.040999999999997,
+      "end": 30.244999999999997
+    },
+    {
+      "text": "coordination",
+      "start": 30.305999999999997,
+      "end": 31.037999999999997
+    },
+    {
+      "text": "more",
+      "start": 31.086,
+      "end": 31.278
+    },
+    {
+      "text": "prevalent",
+      "start": 31.333999999999996,
+      "end": 31.837999999999997
+    },
+    {
+      "text": "and",
+      "start": 31.897999999999996,
+      "end": 32.077999999999996
+    },
+    {
+      "text": "affordable.",
+      "start": 32.135999999999996,
+      "end": 32.79599999999999
+    }
+  ],
+  "resource_timestamps": {},
+  "status": "success",
+  "error": null,
+  "timings": {
+    "script_generation": 13.854176083000002,
+    "audio_generation": 15.783181040999999
+  }
+}
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] HTTP Request: POST http://localhost:9999/webhook "HTTP/1.1 200 OK"
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Webhook sent successfully to http://localhost:9999/webhook
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Webhook delivered in 0.02s
+[2025-11-21 13:24:06] [INFO] [0352ba01-557a-4d47-b3d4-1bbb3cbe50fe] Pipeline completed successfully. Total duration: 29.64s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53787]
+INFO:     Stopping reloader process [53777]

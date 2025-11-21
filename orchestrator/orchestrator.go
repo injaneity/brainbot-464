@@ -1,9 +1,8 @@
 package orchestrator
 
 import (
+	"brainbot/app"
 	"brainbot/common"
-	"brainbot/deduplication"
-	"brainbot/rssfeeds"
 	"brainbot/types"
 	"bytes"
 	"context"
@@ -12,7 +11,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -28,19 +26,17 @@ func RunOnce(ctx context.Context) error {
 	// Load environment variables from .env if present (non-fatal if missing)
 	_ = godotenv.Load()
 
-	// Step 1: Fetch RSS feed using existing rssfeeds package
-	feedURL := rssfeeds.ResolveFeedURL(rssfeeds.DefaultFeedPreset)
-	log.Printf("Fetching RSS feed: %s", feedURL)
+	// Create app client
+	apiURL := app.GetEnvOrDefault("API_URL", "http://localhost:8080")
+	appClient := app.NewClient(apiURL)
 
-	articles, err := rssfeeds.FetchFeed(feedURL, rssfeeds.DefaultCount)
+	// Step 1: Fetch RSS feed using app client
+	log.Println("Fetching RSS feed...")
+	articles, err := appClient.FetchArticles(ctx, "", 0)
 	if err != nil {
 		return fmt.Errorf("failed to fetch articles: %w", err)
 	}
 	log.Printf("Fetched %d articles from feed", len(articles))
-
-	// Extract full content for all articles
-	log.Printf("Extracting full content using %d workers...", rssfeeds.WorkerCount)
-	rssfeeds.ExtractAllContent(articles)
 
 	successCount := 0
 	for _, article := range articles {
@@ -50,23 +46,31 @@ func RunOnce(ctx context.Context) error {
 	}
 	log.Printf("Successfully extracted %d/%d articles", successCount, len(articles))
 
-	// Step 2: Initialize deduplicator
-	log.Println("Initializing deduplication service...")
-	deduplicator, err := initializeDeduplicator()
-	if err != nil {
-		return fmt.Errorf("failed to initialize deduplicator: %w", err)
-	}
-	defer deduplicator.Close()
-
-	log.Println("Deduplicator initialized successfully")
-	log.Printf("Similarity threshold: %.2f%%", deduplication.SimilarityThreshold*100)
-
-	// Step 2b: Initialize optional S3 client (uploads are skipped if not configured)
+	// Step 2: Initialize optional S3 client (uploads are skipped if not configured)
 	s3Client, s3Bucket, s3Prefix := initializeS3()
 
-	// Step 3: Process articles through deduplication
+	// Step 3: Process articles through deduplication via API
 	log.Println("Processing articles for deduplication...")
-	results := processArticles(articles, deduplicator)
+	results, err := appClient.ProcessArticles(ctx, articles)
+	if err != nil {
+		return fmt.Errorf("failed to process articles: %w", err)
+	}
+
+	// Log results
+	for i, r := range results {
+		if r.Status == "duplicate" && r.DeduplicationResult != nil {
+			log.Printf("  [%d/%d] 🔄 DUPLICATE DETECTED (%.2f%% similar to %s)",
+				i+1, len(results),
+				r.DeduplicationResult.SimilarityScore*100,
+				r.DeduplicationResult.MatchingID)
+		} else if r.Status == "new" {
+			log.Printf("  [%d/%d] ✅ NEW ARTICLE - Added to database", i+1, len(results))
+		} else if r.Status == "failed" {
+			log.Printf("  [%d/%d] ⚠️  Skipping - extraction failed: %s", i+1, len(results), r.Error)
+		} else if r.Status == "error" {
+			log.Printf("  [%d/%d] ❌ Error during deduplication: %v", i+1, len(results), r.Error)
+		}
+	}
 
 	// Step 3b: Upload non-duplicate articles to S3 (without images) if configured
 	if s3Client != nil && s3Bucket != "" {
@@ -163,92 +167,7 @@ func stripImagesFromHTML(html string) string {
 	return imgTagRe.ReplaceAllString(html, "")
 }
 
-func initializeDeduplicator() (*deduplication.Deduplicator, error) {
-	// Allow overriding Chroma connection via env for containerized deployments
-	host := strings.TrimSpace(os.Getenv("CHROMA_HOST"))
-	if host == "" {
-		host = "localhost"
-	}
-	port := 8000
-	if v := strings.TrimSpace(os.Getenv("CHROMA_PORT")); v != "" {
-		if p, err := strconv.Atoi(v); err == nil {
-			port = p
-		}
-	}
-	collection := strings.TrimSpace(os.Getenv("CHROMA_COLLECTION"))
-	if collection == "" {
-		collection = "brainbot_articles"
-	}
-
-	chromaConfig := deduplication.ChromaConfig{
-		Host:           host,
-		Port:           port,
-		CollectionName: collection,
-		EmbeddingModel: "",
-	}
-
-	deduplicatorConfig := deduplication.DeduplicatorConfig{
-		ChromaConfig:        chromaConfig,
-		SimilarityThreshold: 0,
-		MaxSearchResults:    0,
-	}
-
-	return deduplication.NewDeduplicator(deduplicatorConfig)
-}
-
-func processArticles(articles []*types.Article, deduplicator *deduplication.Deduplicator) []ArticleResult {
-	results := make([]ArticleResult, 0, len(articles))
-
-	for i, article := range articles {
-		log.Printf("[%d/%d] Processing: %s", i+1, len(articles), article.Title)
-
-		// Skip articles that failed extraction
-		if article.ExtractionError != "" {
-			log.Printf("  ⚠️  Skipping - extraction failed: %s", article.ExtractionError)
-			results = append(results, ArticleResult{
-				Article: article,
-				Status:  "failed",
-				Error:   article.ExtractionError,
-			})
-			continue
-		}
-
-		// Process article through deduplicator
-		dedupResult, err := deduplicator.ProcessArticle(article)
-		if err != nil {
-			log.Printf("  ❌ Error during deduplication: %v", err)
-			results = append(results, ArticleResult{
-				Article: article,
-				Status:  "error",
-				Error:   err.Error(),
-			})
-			continue
-		}
-
-		// Record result based on whether duplicate was found
-		if dedupResult.IsDuplicate {
-			log.Printf("  🔄 DUPLICATE DETECTED (%.2f%% similar to %s)",
-				dedupResult.SimilarityScore*100,
-				dedupResult.MatchingID)
-			results = append(results, ArticleResult{
-				Article:             article,
-				Status:              "duplicate",
-				DeduplicationResult: dedupResult,
-			})
-		} else {
-			log.Printf("  ✅ NEW ARTICLE - Added to database")
-			results = append(results, ArticleResult{
-				Article:             article,
-				Status:              "new",
-				DeduplicationResult: dedupResult,
-			})
-		}
-	}
-
-	return results
-}
-
-func displayResults(results []ArticleResult, articles []*types.Article) {
+func displayResults(results []app.ArticleResult, articles []*types.Article) {
 	totalArticles := len(articles)
 	newArticles := 0
 	duplicateArticles := 0
@@ -273,12 +192,4 @@ func displayResults(results []ArticleResult, articles []*types.Article) {
 	log.Printf("Duplicate Articles: %d", duplicateArticles)
 	log.Printf("Failed Articles:    %d", failedArticles)
 	log.Println("=============================")
-}
-
-// ArticleResult represents the processing result for a single article
-type ArticleResult struct {
-	Article             *types.Article                     `json:"article"`
-	Status              string                             `json:"status"` // "new", "duplicate", "failed", "error"
-	DeduplicationResult *deduplication.DeduplicationResult `json:"deduplication_result,omitempty"`
-	Error               string                             `json:"error,omitempty"`
 }

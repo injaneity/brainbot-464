@@ -1,8 +1,7 @@
 package main
 
 import (
-	"brainbot/deduplication"
-	"brainbot/rssfeeds"
+	"brainbot/app"
 	"brainbot/types"
 	"bytes"
 	"context"
@@ -82,27 +81,23 @@ type errorMsg struct {
 }
 
 // ArticleResult represents deduplication results
-type ArticleResult struct {
-	Article             *types.Article
-	Status              string
-	DeduplicationResult *deduplication.DeduplicationResult
-	Error               string
-}
+type ArticleResult = app.ArticleResult
 
 // WebhookPayload represents the generation service response
 type WebhookPayload struct {
-	UUID                string                   `json:"uuid"`
-	Voiceover           string                   `json:"voiceover"`
-	SubtitleTimestamps  []map[string]interface{} `json:"subtitle_timestamps"`
-	ResourceTimestamps  map[string]interface{}   `json:"resource_timestamps"`
-	Status              string                   `json:"status"`
-	Error               *string                  `json:"error,omitempty"`
-	Timings             map[string]float64       `json:"timings,omitempty"`
+	UUID               string                   `json:"uuid"`
+	Voiceover          string                   `json:"voiceover"`
+	SubtitleTimestamps []map[string]interface{} `json:"subtitle_timestamps"`
+	ResourceTimestamps map[string]interface{}   `json:"resource_timestamps"`
+	Status             string                   `json:"status"`
+	Error              *string                  `json:"error,omitempty"`
+	Timings            map[string]float64       `json:"timings,omitempty"`
 }
 
 // Model represents the application state
 type model struct {
 	state           string // "idle", "fetching", "deduplicating", "sending", "waiting", "complete", "error"
+	appClient       *app.Client
 	articles        []*types.Article
 	dedupResults    []ArticleResult
 	generationUUID  string
@@ -114,9 +109,10 @@ type model struct {
 	logs            []string
 }
 
-func initialModel(webhookPort string, server *http.Server) model {
+func initialModel(webhookPort string, server *http.Server, appClient *app.Client) model {
 	return model{
 		state:         "idle",
+		appClient:     appClient,
 		webhookPort:   webhookPort,
 		webhookServer: server,
 		logs:          []string{},
@@ -142,7 +138,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == "idle" {
 				m.state = "clearing"
 				m.addLog("Clearing ChromaDB cache...")
-				return m, clearCacheAndFetch()
+				return m, clearCacheAndFetch(m.appClient)
 			}
 		}
 
@@ -154,7 +150,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state = "fetching"
 		m.addLog("Cache cleared successfully")
-		return m, fetchArticles()
+		return m, fetchArticles(m.appClient)
 
 	case fetchCompleteMsg:
 		if msg.err != nil {
@@ -165,7 +161,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.articles = msg.articles
 		m.state = "deduplicating"
 		m.addLog(fmt.Sprintf("Fetched %d articles", len(msg.articles)))
-		return m, deduplicateArticles(msg.articles)
+		return m, deduplicateArticles(m.appClient, msg.articles)
 
 	case deduplicationCompleteMsg:
 		if msg.err != nil {
@@ -347,126 +343,51 @@ func formatWebhookResult(payload *WebhookPayload) string {
 }
 
 // Tea commands
-func clearCacheAndFetch() tea.Cmd {
+func clearCacheAndFetch(appClient *app.Client) tea.Cmd {
 	return func() tea.Msg {
-		err := clearChromaCache()
+		ctx := context.Background()
+		err := appClient.ClearCache(ctx)
 		return cacheClearedMsg{err: err}
 	}
 }
 
-func fetchArticles() tea.Cmd {
+func fetchArticles(appClient *app.Client) tea.Cmd {
 	return func() tea.Msg {
 		// Load environment
 		_ = godotenv.Load()
 
-		feedURL := rssfeeds.ResolveFeedURL(rssfeeds.DefaultFeedPreset)
-		articles, err := rssfeeds.FetchFeed(feedURL, rssfeeds.DefaultCount)
+		ctx := context.Background()
+		articles, err := appClient.FetchArticles(ctx, "", 0)
 		if err != nil {
 			return fetchCompleteMsg{err: err}
 		}
-
-		// Extract content
-		rssfeeds.ExtractAllContent(articles)
 
 		return fetchCompleteMsg{articles: articles}
 	}
 }
 
-func deduplicateArticles(articles []*types.Article) tea.Cmd {
+func deduplicateArticles(appClient *app.Client, articles []*types.Article) tea.Cmd {
 	return func() tea.Msg {
 		_ = godotenv.Load()
 
-		// Check if mock mode is enabled (for demo without API keys)
-		mockMode := getEnvOrDefault("MOCK_DEDUPLICATION", "false")
-		if mockMode == "true" || mockMode == "1" {
-			log.Println("⚠️  Mock deduplication mode enabled - all articles marked as NEW")
-			// Mock mode: treat all articles as new
-			results := make([]ArticleResult, 0, len(articles))
-			for _, article := range articles {
-				if article.ExtractionError != "" {
-					results = append(results, ArticleResult{
-						Article: article,
-						Status:  "failed",
-						Error:   article.ExtractionError,
-					})
-					log.Printf("Article %s: FAILED extraction", article.Title)
-					continue
-				}
-
-				results = append(results, ArticleResult{
-					Article: article,
-					Status:  "new",
-					DeduplicationResult: &deduplication.DeduplicationResult{
-						IsDuplicate:     false,
-						MatchingID:      "",
-						SimilarityScore: 0,
-						CheckedAt:       time.Now(),
-					},
-				})
-				log.Printf("Article %s: NEW (mock mode)", article.Title)
-			}
-			return deduplicationCompleteMsg{results: results}
-		}
-
-		// Real deduplication mode
-		chromaConfig := deduplication.ChromaConfig{
-			Host:           getEnvOrDefault("CHROMA_HOST", "localhost"),
-			Port:           8000,
-			CollectionName: getEnvOrDefault("CHROMA_COLLECTION", "brainbot_articles"),
-			EmbeddingModel: "",
-		}
-
-		deduplicatorConfig := deduplication.DeduplicatorConfig{
-			ChromaConfig:        chromaConfig,
-			SimilarityThreshold: 0,
-			MaxSearchResults:    0,
-		}
-
-		deduplicator, err := deduplication.NewDeduplicator(deduplicatorConfig)
+		ctx := context.Background()
+		results, err := appClient.ProcessArticles(ctx, articles)
 		if err != nil {
 			return deduplicationCompleteMsg{err: err}
 		}
-		defer deduplicator.Close()
 
-		// Process articles
-		results := make([]ArticleResult, 0, len(articles))
-		for _, article := range articles {
-			if article.ExtractionError != "" {
-				results = append(results, ArticleResult{
-					Article: article,
-					Status:  "failed",
-					Error:   article.ExtractionError,
-				})
-				log.Printf("Article %s: FAILED extraction", article.Title)
-				continue
+		// Convert app.ArticleResult to local ArticleResult
+		for i, r := range results {
+			if r.Status == "new" {
+				log.Printf("Article %s: NEW - added to database", r.Article.Title)
+			} else if r.Status == "duplicate" {
+				log.Printf("Article %s: DUPLICATE (%.2f%% similar)", r.Article.Title, r.DeduplicationResult.SimilarityScore*100)
+			} else if r.Status == "failed" {
+				log.Printf("Article %s: FAILED extraction", r.Article.Title)
+			} else if r.Status == "error" {
+				log.Printf("Article %s: ERROR - %v", r.Article.Title, r.Error)
 			}
-
-			dedupResult, err := deduplicator.ProcessArticle(article)
-			if err != nil {
-				results = append(results, ArticleResult{
-					Article: article,
-					Status:  "error",
-					Error:   err.Error(),
-				})
-				log.Printf("Article %s: ERROR - %v", article.Title, err)
-				continue
-			}
-
-			if dedupResult.IsDuplicate {
-				results = append(results, ArticleResult{
-					Article:             article,
-					Status:              "duplicate",
-					DeduplicationResult: dedupResult,
-				})
-				log.Printf("Article %s: DUPLICATE (%.2f%% similar)", article.Title, dedupResult.SimilarityScore*100)
-			} else {
-				results = append(results, ArticleResult{
-					Article:             article,
-					Status:              "new",
-					DeduplicationResult: dedupResult,
-				})
-				log.Printf("Article %s: NEW - added to database", article.Title)
-			}
+			_ = i
 		}
 
 		return deduplicationCompleteMsg{results: results}
@@ -539,29 +460,7 @@ func waitForWebhook(received bool) tea.Cmd {
 }
 
 func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-// clearChromaCache clears all documents from the ChromaDB collection
-func clearChromaCache() error {
-	chromaConfig := deduplication.ChromaConfig{
-		Host:           getEnvOrDefault("CHROMA_HOST", "localhost"),
-		Port:           8000,
-		CollectionName: getEnvOrDefault("CHROMA_COLLECTION", "brainbot_articles"),
-		EmbeddingModel: "",
-	}
-
-	// Need to create a full client to get collection ID
-	// Use minimal embeddings just to initialize (won't be used for clearing)
-	chroma, err := deduplication.NewChromaReadOnly(chromaConfig)
-	if err != nil {
-		return fmt.Errorf("failed to connect to ChromaDB: %w", err)
-	}
-
-	return chroma.ClearCollection()
+	return app.GetEnvOrDefault(key, defaultVal)
 }
 
 // Webhook server
@@ -626,8 +525,12 @@ func main() {
 	// Set up webhook server
 	webhookPort := getEnvOrDefault("WEBHOOK_PORT", "9999")
 
+	// Create app client
+	apiURL := getEnvOrDefault("API_URL", "http://localhost:8080")
+	appClient := app.NewClient(apiURL)
+
 	// Create the model first
-	m := initialModel(webhookPort, nil)
+	m := initialModel(webhookPort, nil, appClient)
 
 	// Create the tea program
 	program := tea.NewProgram(m)
