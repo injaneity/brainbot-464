@@ -1,0 +1,357 @@
+/Users/zanechee/Documents/projects/github/brainbot-464/generation_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Will watch for changes in these directories: ['/Users/zanechee/Documents/projects/github/brainbot-464/generation_service']
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+INFO:     Started reloader process [59065] using StatReload
+/Users/zanechee/Documents/projects/github/brainbot-464/generation_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [59071]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:58773 - "GET /health HTTP/1.1" 200 OK
+[2025-11-21 13:37:22] [INFO] [N/A] Received generate request: b71e3268-e3b0-49fd-b47e-c73e36e8e024
+[2025-11-21 13:37:22] [INFO] [N/A] Request b71e3268-e3b0-49fd-b47e-c73e36e8e024 accepted for processing
+INFO:     127.0.0.1:58820 - "POST /generate HTTP/1.1" 202 Accepted
+[2025-11-21 13:37:22] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Starting generation pipeline
+[2025-11-21 13:37:22] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Target: 30s (60 words @ 120 WPM)
+[2025-11-21 13:37:22] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Step 1: Generating script with Gemini
+[2025-11-21 13:37:22] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] AFC is enabled with max remote calls: 10.
+[2025-11-21 13:37:28] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+[2025-11-21 13:37:28] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Script generated (426 chars, 60 words) in 6.04s
+[2025-11-21 13:37:28] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Step 2: Generating audio with Fal.ai ElevenLabs
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] HTTP Request: POST https://fal.run/fal-ai/elevenlabs/tts/eleven-v3 "HTTP/1.1 200 OK"
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Fal.ai TTS response received successfully
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Audio generated successfully. Timestamp count: 16
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Audio generated in 13.42s
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Received 16 character-level timestamp entries from Fal.ai
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Step 3: Converting character-level timestamps to word-level format
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Converted to 61 word-level timestamps
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Step 4: Resource timing (placeholder)
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Step 5: Sending webhook
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Webhook payload: {
+  "uuid": "b71e3268-e3b0-49fd-b47e-c73e36e8e024",
+  "voiceover": "https://v3b.fal.media/files/b/penguin/HGczGVbwBXQdKYPb-G4_8_output.mp3",
+  "subtitle_timestamps": [
+    {
+      "text": "A",
+      "start": 0.0,
+      "end": 0.08
+    },
+    {
+      "text": "Singaporean",
+      "start": 0.136,
+      "end": 0.72
+    },
+    {
+      "text": "couple",
+      "start": 0.777,
+      "end": 1.119
+    },
+    {
+      "text": "faced",
+      "start": 1.185,
+      "end": 1.5150000000000001
+    },
+    {
+      "text": "fines",
+      "start": 1.621,
+      "end": 2.151
+    },
+    {
+      "text": "and",
+      "start": 2.191,
+      "end": 2.311
+    },
+    {
+      "text": "jail",
+      "start": 2.423,
+      "end": 2.8709999999999996
+    },
+    {
+      "text": "for",
+      "start": 2.9109999999999996,
+      "end": 3.0309999999999997
+    },
+    {
+      "text": "illegal",
+      "start": 3.1109999999999998,
+      "end": 3.671
+    },
+    {
+      "text": "Ragdoll",
+      "start": 3.771,
+      "end": 4.311
+    },
+    {
+      "text": "cat",
+      "start": 4.3709999999999996,
+      "end": 4.551
+    },
+    {
+      "text": "breeding,",
+      "start": 4.604,
+      "end": 5.508
+    },
+    {
+      "text": "while",
+      "start": 5.548,
+      "end": 5.748
+    },
+    {
+      "text": "PM",
+      "start": 5.934,
+      "end": 6.306
+    },
+    {
+      "text": "Wong",
+      "start": 6.386,
+      "end": 6.7059999999999995
+    },
+    {
+      "text": "attended",
+      "start": 6.749999999999999,
+      "end": 7.101999999999999
+    },
+    {
+      "text": "the",
+      "start": 7.122,
+      "end": 7.1819999999999995
+    },
+    {
+      "text": "G-20",
+      "start": 7.302,
+      "end": 7.741999999999999
+    },
+    {
+      "text": "summit",
+      "start": 7.7989999999999995,
+      "end": 8.141
+    },
+    {
+      "text": "and",
+      "start": 8.181,
+      "end": 8.301
+    },
+    {
+      "text": "visited",
+      "start": 8.360999999999999,
+      "end": 8.780999999999999
+    },
+    {
+      "text": "Ethiopia.",
+      "start": 8.869,
+      "end": 9.652999999999999
+    },
+    {
+      "text": "SMRT",
+      "start": 10.105999999999998,
+      "end": 11.411999999999999
+    },
+    {
+      "text": "unveiled",
+      "start": 11.473999999999998,
+      "end": 11.969999999999999
+    },
+    {
+      "text": "a",
+      "start": 12.049999999999999,
+      "end": 12.129999999999999
+    },
+    {
+      "text": "$7",
+      "start": 12.169999999999998,
+      "end": 12.53
+    },
+    {
+      "text": "million",
+      "start": 12.62,
+      "end": 13.25
+    },
+    {
+      "text": "depot",
+      "start": 13.315999999999999,
+      "end": 13.645999999999999
+    },
+    {
+      "text": "upgrade,",
+      "start": 13.706,
+      "end": 14.526
+    },
+    {
+      "text": "doubling",
+      "start": 14.579,
+      "end": 15.003
+    },
+    {
+      "text": "train",
+      "start": 15.068999999999999,
+      "end": 15.399
+    },
+    {
+      "text": "overhaul",
+      "start": 15.461,
+      "end": 15.957
+    },
+    {
+      "text": "capacity",
+      "start": 16.019,
+      "end": 16.515
+    },
+    {
+      "text": "with",
+      "start": 16.563,
+      "end": 16.755
+    },
+    {
+      "text": "automation.",
+      "start": 16.826999999999998,
+      "end": 17.627
+    },
+    {
+      "text": "AI",
+      "start": 18.107,
+      "end": 19.067
+    },
+    {
+      "text": "is",
+      "start": 19.119999999999997,
+      "end": 19.226
+    },
+    {
+      "text": "transforming",
+      "start": 19.293,
+      "end": 20.096999999999998
+    },
+    {
+      "text": "wedding",
+      "start": 20.137,
+      "end": 20.416999999999998
+    },
+    {
+      "text": "planning,",
+      "start": 20.47,
+      "end": 21.214
+    },
+    {
+      "text": "shifting",
+      "start": 21.258,
+      "end": 21.61
+    },
+    {
+      "text": "services",
+      "start": 21.672,
+      "end": 22.168
+    },
+    {
+      "text": "towards",
+      "start": 22.218,
+      "end": 22.567999999999998
+    },
+    {
+      "text": "coordination.",
+      "start": 22.634999999999998,
+      "end": 23.519
+    },
+    {
+      "text": "Additionally",
+      "start": 23.611,
+      "end": 24.715
+    },
+    {
+      "text": ",",
+      "start": 24.715,
+      "end": 24.955
+    },
+    {
+      "text": "the",
+      "start": 24.995,
+      "end": 25.115
+    },
+    {
+      "text": "tabla!",
+      "start": 25.181,
+      "end": 25.871
+    },
+    {
+      "text": "publication",
+      "start": 25.901,
+      "end": 26.231
+    },
+    {
+      "text": "relaunched",
+      "start": 26.331,
+      "end": 26.951
+    },
+    {
+      "text": "its",
+      "start": 26.991,
+      "end": 27.111
+    },
+    {
+      "text": "website",
+      "start": 27.171,
+      "end": 27.591
+    },
+    {
+      "text": "to",
+      "start": 27.644000000000002,
+      "end": 27.75
+    },
+    {
+      "text": "better",
+      "start": 27.795,
+      "end": 28.065
+    },
+    {
+      "text": "connect",
+      "start": 28.115000000000002,
+      "end": 28.465
+    },
+    {
+      "text": "the",
+      "start": 28.485,
+      "end": 28.545
+    },
+    {
+      "text": "Indian",
+      "start": 28.602,
+      "end": 28.944
+    },
+    {
+      "text": "community",
+      "start": 29.0,
+      "end": 29.504
+    },
+    {
+      "text": "locally",
+      "start": 29.574,
+      "end": 30.064
+    },
+    {
+      "text": "and",
+      "start": 30.144000000000002,
+      "end": 30.384
+    },
+    {
+      "text": "globally.",
+      "start": 30.446,
+      "end": 31.022000000000002
+    }
+  ],
+  "resource_timestamps": {},
+  "status": "success",
+  "error": null,
+  "timings": {
+    "script_generation": 6.0354153749999995,
+    "audio_generation": 13.419523875
+  }
+}
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] HTTP Request: POST http://localhost:9999/webhook "HTTP/1.1 200 OK"
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Webhook sent successfully to http://localhost:9999/webhook
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Webhook delivered in 0.02s
+[2025-11-21 13:37:42] [INFO] [b71e3268-e3b0-49fd-b47e-c73e36e8e024] Pipeline completed successfully. Total duration: 19.45s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59071]
+INFO:     Stopping reloader process [59065]
