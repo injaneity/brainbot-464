@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"brainbot/api"
-	"brainbot/orchestrator"
 
 	"github.com/joho/godotenv"
 )
@@ -22,39 +19,18 @@ func main() {
 		addr = ":" + v
 	}
 
-	// Start one orchestrator run in the background at startup (configurable)
-	if isTrueEnv("RUN_ORCHESTRATOR_ON_STARTUP", true) {
-		go func() {
-			if err := orchestrator.RunOnce(context.Background()); err != nil {
-				log.Printf("orchestrator run failed: %v", err)
-			}
-		}()
-	} else {
-		log.Printf("RUN_ORCHESTRATOR_ON_STARTUP is disabled; skipping startup run")
-	}
-
 	r := api.NewRouter()
 	log.Printf("Starting API server on %s", addr)
+	log.Println("API endpoints available:")
+	log.Println("  GET  /api/health")
+	log.Println("  POST /api/deduplication/check")
+	log.Println("  POST /api/deduplication/add")
+	log.Println("  POST /api/deduplication/process")
+	log.Println("  GET  /api/deduplication/count")
+	log.Println("  DELETE /api/deduplication/clear")
+	
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)
-	}
-}
-
-// isTrueEnv returns a boolean from an environment variable with common truthy/falsey parsing.
-// If the variable is unset or unrecognized, it falls back to def.
-func isTrueEnv(name string, def bool) bool {
-	v := strings.TrimSpace(os.Getenv(name))
-	if v == "" {
-		return def
-	}
-	v = strings.ToLower(v)
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return def
 	}
 }
 
