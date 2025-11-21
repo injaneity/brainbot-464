@@ -3,44 +3,57 @@ package video
 import (
     "fmt"
     "io"
+    "math"
     "net/http"
     "os"
     "path/filepath"
+    "strings"
     
+    "brainbot/config"
     ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
 func CreateVideo(input VideoInput, backgroundVideoPath string, outputPath string) error {
-    audioPath := fmt.Sprintf("/tmp/%s_audio.mp3", input.UUID)
+    tmpDir := os.TempDir()
+    audioPath := filepath.Join(tmpDir, fmt.Sprintf("%s_audio.mp3", input.UUID))
     if err := downloadFile(input.Voiceover, audioPath); err != nil {
         return fmt.Errorf("failed to download audio: %w", err)
     }
     defer os.Remove(audioPath)
     
-    srtPath := fmt.Sprintf("/tmp/%s_subtitles.srt", input.UUID)
+    srtPath := filepath.Join(tmpDir, fmt.Sprintf("%s_subtitles.srt", input.UUID))
     if err := generateSRT(input.SubtitleTimestamps, srtPath); err != nil {
         return fmt.Errorf("failed to generate SRT: %w", err)
     }
     defer os.Remove(srtPath)
     
-    duration := input.SubtitleTimestamps[len(input.SubtitleTimestamps)-1].End
+    // Calculate duration: last subtitle end time + padding
+    duration := input.SubtitleTimestamps[len(input.SubtitleTimestamps)-1].End + config.VideoEndPadding
     
-    err := ffmpeg.Input(backgroundVideoPath).
-        Output(outputPath, ffmpeg.KwArgs{
-            "i":      audioPath,
-            "t":      fmt.Sprintf("%.2f", duration),
-            "vf":     generateSubtitleFilter(srtPath),
-            "map":    "0:v:0",
-            "map":    "1:a:0",
-            "c:v":    "libx264",
-            "c:a":    "aac",
-            "b:a":    "192k",
-            "preset": "fast",
-            "s":      "720x1280",
-            "aspect": "9:16",
-        }).
-        OverWriteOutput().
-        Run()
+    // Enforce maximum video duration (3 minutes)
+    duration = math.Min(duration, config.MaxVideoDuration)
+    
+    // Build FFmpeg command: overlay subtitles on video, then merge with audio
+    video := ffmpeg.Input(backgroundVideoPath, ffmpeg.KwArgs{"t": fmt.Sprintf("%.2f", duration)})
+    audio := ffmpeg.Input(audioPath)
+    
+    // Convert Windows path to format FFmpeg expects (forward slashes, escape colons)
+    srtPathForFFmpeg := filepath.ToSlash(srtPath)
+    srtPathForFFmpeg = strings.ReplaceAll(srtPathForFFmpeg, ":", "\\:")
+    
+    videoWithSubs := ffmpeg.Filter(
+        []*ffmpeg.Stream{video}, "subtitles", ffmpeg.Args{srtPathForFFmpeg}, 
+        ffmpeg.KwArgs{"force_style": "FontName=Consolas,FontSize=32,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,Bold=1"},
+    )
+    
+    err := ffmpeg.Output([]*ffmpeg.Stream{videoWithSubs, audio}, outputPath, ffmpeg.KwArgs{
+        "c:v":      config.VideoCodec,
+        "c:a":      config.AudioCodec,
+        "b:a":      config.AudioBitrate,
+        "preset":   config.VideoPreset,
+        "s":        fmt.Sprintf("%dx%d", config.VideoWidth, config.VideoHeight),
+        "shortest": "",
+    }).OverWriteOutput().Run()
     
     if err != nil {
         return fmt.Errorf("ffmpeg failed: %w", err)
