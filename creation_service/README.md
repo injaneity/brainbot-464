@@ -56,6 +56,12 @@ creation_service/
 │       ├── creator.go               # Video creation with FFmpeg
 │       ├── uploader.go              # YouTube upload logic
 │       └── processor.go             # Orchestration pipeline
+├── scripts/
+│   ├── README.md                    # Scripts documentation
+│   └── test_video_generation.go    # Test video creation
+├── inputs/                          # JSON input files for batch mode & testing
+├── outputs/                         # Generated video outputs
+├── backgroundvids/                  # Background video assets
 ├── README.md
 └── Dockerfile (coming soon)
 ```
@@ -72,11 +78,13 @@ creation_service/
 ### Install FFmpeg
 
 **macOS:**
+
 ```bash
 brew install ffmpeg
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install ffmpeg
@@ -88,6 +96,7 @@ Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 ### Environment Setup
 
 1. **YouTube API Credentials**
+
    - Create a service account in Google Cloud Console
    - Enable YouTube Data API v3
    - Download the service account JSON file as `service-account.json`
@@ -118,11 +127,13 @@ The service will be available at `http://localhost:8081`
 
 ### Batch Mode
 
-Process all JSON files from `input/` directory:
+Process all JSON files from `inputs/` directory:
 
 ```bash
 go run main.go -batch
 ```
+
+Place your JSON files (matching the request schema) in the `inputs/` directory, and the service will process them sequentially.
 
 ## API Usage
 
@@ -133,6 +144,7 @@ curl http://localhost:8081/health
 ```
 
 **Response:**
+
 ```json
 {
   "status": "healthy"
@@ -165,6 +177,7 @@ curl -X POST http://localhost:8081/api/process-video \
 ```
 
 **Request Schema:**
+
 ```json
 {
   "uuid": "string (required)",
@@ -182,6 +195,7 @@ curl -X POST http://localhost:8081/api/process-video \
 ```
 
 **Response (202 Accepted):**
+
 ```json
 {
   "success": true,
@@ -190,6 +204,7 @@ curl -X POST http://localhost:8081/api/process-video \
 ```
 
 The video will be processed asynchronously. Check logs for progress:
+
 ```
 📥 Received video processing request: UUID=test-123
 🎨 Using background: background1.mp4
@@ -204,20 +219,21 @@ The video will be processed asynchronously. Check logs for progress:
 
 All configuration is in `app/config/constants.go`:
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `VideoWidth` | 1080 | Video width (9:16 format) |
-| `VideoHeight` | 1920 | Video height |
-| `VideoCodec` | libx264 | H.264 codec |
-| `AudioCodec` | aac | AAC audio codec |
-| `AudioBitrate` | 192k | Audio quality |
-| `MaxVideoDuration` | 180.0 | Max 3 minutes |
-| `VideoEndPadding` | 0.5 | End padding in seconds |
-| `MaxConcurrentVideos` | 3 | Parallel processing limit |
+| Constant              | Value   | Description               |
+| --------------------- | ------- | ------------------------- |
+| `VideoWidth`          | 1080    | Video width (9:16 format) |
+| `VideoHeight`         | 1920    | Video height              |
+| `VideoCodec`          | libx264 | H.264 codec               |
+| `AudioCodec`          | aac     | AAC audio codec           |
+| `AudioBitrate`        | 192k    | Audio quality             |
+| `MaxVideoDuration`    | 180.0   | Max 3 minutes             |
+| `VideoEndPadding`     | 0.5     | End padding in seconds    |
+| `MaxConcurrentVideos` | 3       | Parallel processing limit |
 
 ## Subtitle Styling
 
 Subtitles are overlaid with the following style:
+
 - **Font**: Consolas
 - **Size**: 32px
 - **Color**: White (#FFFFFF)
@@ -228,6 +244,7 @@ Subtitles are overlaid with the following style:
 ## Error Handling
 
 The service handles various errors:
+
 - Invalid JSON payload → 400 Bad Request
 - Missing required fields → 400 Bad Request
 - Download failures → Logged, processing aborted
@@ -279,27 +296,35 @@ Generation Service                Creation Service
 ## Troubleshooting
 
 **Issue: FFmpeg not found**
+
 ```
 Error: ffmpeg failed: exec: "ffmpeg": executable file not found
 ```
+
 Solution: Install FFmpeg using package manager
 
 **Issue: Service account authentication failed**
+
 ```
 Error: unable to read service account file
 ```
+
 Solution: Ensure `service-account.json` is in the project root with correct permissions
 
 **Issue: No background videos found**
+
 ```
 Error: no background videos found in backgroundvids
 ```
+
 Solution: Add .mp4 files to `backgroundvids/` directory
 
 **Issue: YouTube quota exceeded**
+
 ```
 Error: failed to upload video: quotaExceeded
 ```
+
 Solution: Check YouTube API quota limits in Google Cloud Console
 
 ## Development
