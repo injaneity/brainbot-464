@@ -19,6 +19,7 @@ go.work
 
 # Build output
 brainbot
+demo_bin
 
 # IDE
 .vscode/
@@ -38,3 +39,15 @@ chroma_data/
 
 # Environment 
 .env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+venv/
+*.egg-info/
+
+# Log files
+*.log
+*.pid
