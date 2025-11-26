@@ -13,3 +13,4 @@ test_video_generation
 
 # Secrets
 client_secret.json
+.secrets

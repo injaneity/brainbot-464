@@ -117,19 +117,31 @@ Download from [ffmpeg.org](https://ffmpeg.org/download.html)
     export YOUTUBE_REFRESH_TOKEN="refresh-token-from-consent-flow"
     ```
 
-    To automate these steps (including regenerating tokens when needed) you can run:
+    To automate the credential setup (including regenerating tokens when needed) you can run:
 
     ```bash
-    scripts/setup_and_run_creation_service.sh \
-      --client-secret scripts/client_secret.json \
-      --mode api --port :8081
+    scripts/setup_creation_service_credentials.sh \
+      --client-secret scripts/client_secret.json
     ```
 
-    The script will run the OAuth helper (if needed), export the env vars, and start the service. Pass `--mode batch` or extra Go CLI flags after `--` to customize behavior.
+    The script will run the OAuth helper (if needed) and refresh the `.secrets/youtube.env` file for you. After it finishes, source that env file and start the service manually (API or batch mode) using `go run main.go ...`.
 
 2. **Background Videos**
    - Place background videos (9:16 vertical format, .mp4) in `backgroundvids/` directory
    - Service will randomly select from available videos
+
+3. **Upload-only Smoke Test (optional)**
+
+  If you already have a rendered video (e.g., in `outputs/uuid.mp4`) and just want to validate uploading, run:
+
+  ```bash
+  scripts/test_upload.sh \
+    --video outputs/demo-001.mp4 \
+    --title "Demo upload" \
+    --client-secret scripts/client_secret.json
+  ```
+
+  The script ensures your OAuth tokens exist, sources the `YOUTUBE_*` env vars, and calls `go run ./creation_service/cmd/upload` to upload that MP4 with the metadata you specify. Provide `--description`, `--source-url`, or custom tags if you need to override the defaults.
 
 ## Running the Service
 
