@@ -10,3 +10,6 @@ backgroundvids/*
 creation_service
 test_video_generation
 *.exe
+
+# Secrets
+client_secret.json

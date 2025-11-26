@@ -8,6 +8,7 @@ import (
 
 	"brainbot/creation_service/app"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
@@ -17,20 +18,60 @@ type Uploader struct {
 	service *youtube.Service
 }
 
-func NewUploader(serviceAccountFile string) (*Uploader, error) {
+const (
+	envYouTubeClientID     = "YOUTUBE_CLIENT_ID"
+	envYouTubeClientSecret = "YOUTUBE_CLIENT_SECRET"
+	envYouTubeRefreshToken = "YOUTUBE_REFRESH_TOKEN"
+)
+
+type oauthCredentials struct {
+	ClientID     string
+	ClientSecret string
+	RefreshToken string
+}
+
+func loadOAuthCredentials() (oauthCredentials, error) {
+	creds := oauthCredentials{
+		ClientID:     os.Getenv(envYouTubeClientID),
+		ClientSecret: os.Getenv(envYouTubeClientSecret),
+		RefreshToken: os.Getenv(envYouTubeRefreshToken),
+	}
+
+	missing := make([]string, 0, 3)
+	if creds.ClientID == "" {
+		missing = append(missing, envYouTubeClientID)
+	}
+	if creds.ClientSecret == "" {
+		missing = append(missing, envYouTubeClientSecret)
+	}
+	if creds.RefreshToken == "" {
+		missing = append(missing, envYouTubeRefreshToken)
+	}
+
+	if len(missing) > 0 {
+		return oauthCredentials{}, fmt.Errorf("missing required env vars: %v", missing)
+	}
+
+	return creds, nil
+}
+
+func NewUploader() (*Uploader, error) {
+	creds, err := loadOAuthCredentials()
+	if err != nil {
+		return nil, err
+	}
+
 	ctx := context.Background()
-
-	data, err := os.ReadFile(serviceAccountFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read service account file: %w", err)
+	conf := &oauth2.Config{
+		ClientID:     creds.ClientID,
+		ClientSecret: creds.ClientSecret,
+		Endpoint:     google.Endpoint,
+		Scopes:       []string{youtube.YoutubeUploadScope},
+		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob",
 	}
 
-	config, err := google.JWTConfigFromJSON(data, youtube.YoutubeUploadScope)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse service account: %w", err)
-	}
-
-	client := config.Client(ctx)
+	token := &oauth2.Token{RefreshToken: creds.RefreshToken}
+	client := conf.Client(ctx, token)
 
 	service, err := youtube.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
