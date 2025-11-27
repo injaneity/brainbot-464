@@ -12,9 +12,6 @@ import (
 )
 
 const (
-	// ServiceAccountPath is the path to YouTube API service account credentials
-	ServiceAccountPath = "service-account.json"
-
 	// DefaultAPIPort is the default port for the HTTP API server
 	DefaultAPIPort = ":8081"
 )
@@ -28,7 +25,7 @@ func main() {
 	log.Println("🎬 Video Creation Service - Starting...")
 
 	// Initialize video processor
-	proc, err := services.NewVideoProcessor(ServiceAccountPath, config.BackgroundsDir)
+	proc, err := services.NewVideoProcessor(config.BackgroundsDir)
 	if err != nil {
 		log.Fatalf("❌ Failed to initialize processor: %v", err)
 	}

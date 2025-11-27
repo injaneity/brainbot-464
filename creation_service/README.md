@@ -72,7 +72,7 @@ creation_service/
 
 - Go 1.24 or higher
 - FFmpeg installed on system
-- YouTube API service account credentials
+- YouTube API OAuth client (client ID/secret) and refresh token for the channel you want to upload to
 - Background videos in `backgroundvids/` directory
 
 ### Install FFmpeg
@@ -95,16 +95,53 @@ Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
 ### Environment Setup
 
-1. **YouTube API Credentials**
+1. **YouTube OAuth Credentials**
 
-   - Create a service account in Google Cloud Console
-   - Enable YouTube Data API v3
-   - Download the service account JSON file as `service-account.json`
-   - Place it in the project root
+  - In Google Cloud Console, enable the **YouTube Data API v3**
+  - Create an **OAuth client ID** (Desktop app) and download the JSON file with the client ID/secret
+  - Generate a refresh token for the YouTube channel owner by running the helper script:
+
+    ```bash
+    cd creation_service
+    python3 scripts/get_refresh_token.py \
+      --client-secret scripts/client_secret.json \
+      --scopes https://www.googleapis.com/auth/youtube.upload
+    ```
+
+    The script opens a browser window for consent and prints the refresh token (store it securely).
+  - Export the values as environment variables before running the service:
+
+    ```bash
+    export YOUTUBE_CLIENT_ID="your-client-id"
+    export YOUTUBE_CLIENT_SECRET="your-client-secret"
+    export YOUTUBE_REFRESH_TOKEN="refresh-token-from-consent-flow"
+    ```
+
+    To automate the credential setup (including regenerating tokens when needed) you can run:
+
+    ```bash
+    scripts/setup_creation_service_credentials.sh \
+      --client-secret scripts/client_secret.json
+    ```
+
+    The script will run the OAuth helper (if needed) and refresh the `.secrets/youtube.env` file for you. After it finishes, source that env file and start the service manually (API or batch mode) using `go run main.go ...`.
 
 2. **Background Videos**
    - Place background videos (9:16 vertical format, .mp4) in `backgroundvids/` directory
    - Service will randomly select from available videos
+
+3. **Upload-only Smoke Test (optional)**
+
+  If you already have a rendered video (e.g., in `outputs/uuid.mp4`) and just want to validate uploading, run:
+
+  ```bash
+  scripts/test_upload.sh \
+    --video outputs/demo-001.mp4 \
+    --title "Demo upload" \
+    --client-secret scripts/client_secret.json
+  ```
+
+  The script ensures your OAuth tokens exist, sources the `YOUTUBE_*` env vars, and calls `go run ./creation_service/cmd/upload` to upload that MP4 with the metadata you specify. Provide `--description`, `--source-url`, or custom tags if you need to override the defaults.
 
 ## Running the Service
 
@@ -258,8 +295,10 @@ The service handles various errors:
 ```bash
 docker build -t creation-service .
 docker run -p 8081:8081 \
-  -v $(pwd)/service-account.json:/app/service-account.json \
   -v $(pwd)/backgroundvids:/app/backgroundvids \
+  -e YOUTUBE_CLIENT_ID \
+  -e YOUTUBE_CLIENT_SECRET \
+  -e YOUTUBE_REFRESH_TOKEN \
   creation-service
 ```
 
@@ -303,13 +342,13 @@ Error: ffmpeg failed: exec: "ffmpeg": executable file not found
 
 Solution: Install FFmpeg using package manager
 
-**Issue: Service account authentication failed**
+**Issue: OAuth credentials missing**
 
 ```
-Error: unable to read service account file
+Error: missing required env vars: [YOUTUBE_CLIENT_ID ...]
 ```
 
-Solution: Ensure `service-account.json` is in the project root with correct permissions
+Solution: Export `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, and `YOUTUBE_REFRESH_TOKEN` before running the service (or provide them via your process manager).
 
 **Issue: No background videos found**
 

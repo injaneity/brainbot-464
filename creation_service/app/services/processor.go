@@ -21,8 +21,8 @@ type VideoProcessor struct {
 }
 
 // NewVideoProcessor initializes a new video processor
-func NewVideoProcessor(serviceAccountPath string, backgroundsDir string) (*VideoProcessor, error) {
-	uploader, err := NewUploader(serviceAccountPath)
+func NewVideoProcessor(backgroundsDir string) (*VideoProcessor, error) {
+	uploader, err := NewUploader()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize YouTube uploader: %w", err)
 	}
