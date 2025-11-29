@@ -55,8 +55,18 @@ if [ "$MODE" = "docker" ]; then
         exit 1
     fi
     
-    if [ -z "$GEMINI_API_KEY" ] || [ -z "$FAL_KEY" ]; then
-        echo -e "${YELLOW}Warning: GEMINI_API_KEY or FAL_KEY not set${NC}"
+    GEN_ENV_FILE="generation_service/.env"
+
+    if [ ! -f "$GEN_ENV_FILE" ]; then
+        echo -e "${RED}Missing $GEN_ENV_FILE${NC}"
+        echo -e "${YELLOW}Create it with GOOGLE_API_KEY and FAL_KEY, e.g.:${NC}"
+        echo "GOOGLE_API_KEY=your-gemini-api-key"
+        echo "FAL_KEY=your-fal-key"
+        exit 1
+    fi
+
+    if ! grep -q '^GOOGLE_API_KEY=' "$GEN_ENV_FILE" || ! grep -q '^FAL_KEY=' "$GEN_ENV_FILE"; then
+        echo -e "${YELLOW}Warning: GOOGLE_API_KEY or FAL_KEY not set in $GEN_ENV_FILE${NC}"
         read -p "Continue? (y/n) " -n 1 -r
         echo
         [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
@@ -82,7 +92,7 @@ if [ "$MODE" = "docker" ]; then
     }
     
     wait_for_service "http://localhost:8090" "Kafka UI" || exit 1
-    wait_for_service "http://localhost:8000/api/v1/heartbeat" "ChromaDB" || exit 1
+    wait_for_service "http://localhost:8000/api/v2/heartbeat" "ChromaDB" || exit 1
     wait_for_service "http://localhost:8002/health" "Generation" || true
     wait_for_service "http://localhost:8080/api/health" "API" || exit 1
     

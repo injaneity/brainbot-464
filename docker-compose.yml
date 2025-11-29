@@ -71,11 +71,6 @@ services:
       ANONYMIZED_TELEMETRY: "FALSE"
     networks:
       - brainbot-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # Application Services
   generation-service:
@@ -89,8 +84,8 @@ services:
       PORT: 8000
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      FAL_KEY: ${FAL_KEY}
+    volumes:
+    - ./generation_service/.env:/app/.env:ro
     depends_on:
       kafka:
         condition: service_healthy
@@ -109,9 +104,10 @@ services:
       PORT: 8080
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
+      COHERE_API_KEY: ${COHERE_API_KEY}
     depends_on:
       chromadb:
-        condition: service_healthy
+        condition: service_started
       kafka:
         condition: service_healthy
     networks:
@@ -123,16 +119,12 @@ services:
       context: .
       dockerfile: creation_service/Dockerfile
     container_name: brainbot-creation
+    env_file:
+    - ./creation_service/.secrets/youtube.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_VIDEO_REQUESTS: video-processing-requests
       KAFKA_CONSUMER_GROUP_ID: creation-service-consumer-group
-      # YouTube OAuth credentials (loaded from .env or passed at runtime)
-      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID}
-      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET}
-      YOUTUBE_ACCESS_TOKEN: ${YOUTUBE_ACCESS_TOKEN}
-      YOUTUBE_REFRESH_TOKEN: ${YOUTUBE_REFRESH_TOKEN}
-      YOUTUBE_TOKEN_EXPIRY: ${YOUTUBE_TOKEN_EXPIRY}
     depends_on:
       kafka:
         condition: service_healthy
