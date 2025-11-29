@@ -200,9 +200,11 @@ echo -e "${BLUE}Step 5/6: Starting API Server...${NC}"
 if check_port 8080; then
     echo -e "${GREEN}API Server already running on port 8080${NC}"
 else
-    nohup go run main.go > api_server.log 2>&1 &
+    cd ingestion_service
+    nohup go run main.go > ../api_server.log 2>&1 &
     API_SERVER_PID=$!
     API_SERVER_STARTED=true
+    cd ..
 
     if wait_for_service "http://localhost:8080/api/health" "API Server"; then
         echo -e "${GREEN}✓ API Server started successfully (PID: $API_SERVER_PID)${NC}"
@@ -249,11 +251,11 @@ export WEBHOOK_PORT=9999
 export GENERATION_SERVICE_URL=http://localhost:8002
 
 # Run the demo (this will block until demo exits)
-echo -e "${GREEN}Starting demo...${NC}"
+echo -e "${GREEN}Starting demo client...${NC}"
 echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
 echo -e "${YELLOW}Press 'q' or Ctrl+C to quit${NC}"
 echo ""
 
-go run cmd/demo/main.go
+go run demo/main.go
 
 # Cleanup will be called automatically by the trap

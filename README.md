@@ -1,323 +1,242 @@
 # BrainBot
 
-Microservice-based RSS feed ingestion and AI content generation platform. Fetches RSS feeds, extracts full article content, deduplicates using vector embeddings, and generates AI-powered audio scripts with subtitles.
+Automated RSS-to-YouTube pipeline using AI. Fetches articles, generates video content, and publishes to YouTube.
 
-## Features
+## 🎯 Quick Start
 
-- **RSS Feed Processing**: Fetch and parse RSS/Atom feeds with presets (CNA, Straits Times, Hacker News, Tech Review)
-- **Content Extraction**: Full-text extraction via Mozilla Readability with parallel worker pools
-- **Vector-Based Deduplication**: ChromaDB-powered similarity detection using embeddings (Cohere or OpenAI)
-- **Microservice Architecture**: Fully isolated services communicating via REST APIs
-- **AI Content Generation**: Generate scripts, audio (TTS), and subtitles from articles
-- **S3 Storage**: Optional cloud storage for processed articles
-- **Interactive Demo**: Terminal UI showcasing end-to-end integration
-- **Docker Support**: Containerized services for easy deployment
+### Docker Mode (Recommended)
 
-## Architecture
+```bash
+# 1. Set up YouTube credentials
+cd creation_service/scripts
+./setup_creation_service_credentials.sh
+cd ../..
 
-```
-┌──────────────┐     ┌──────────────────┐     ┌─────────────┐
-│   API Server │────▶│  Deduplication   │────▶│  ChromaDB   │
-│  (port 8080) │     │    Service       │     │ (port 8000) │
-└──────┬───────┘     └──────────────────┘     └─────────────┘
-       │
-       ├─► RSS Orchestrator
-       ├─► Articles Management
-       └─► Health Checks
+# 2. Create .env file with API keys
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY and FAL_KEY
 
-┌──────────────────┐
-│  Generation      │
-│  Service         │
-│  (port 8002)     │
-└──────────────────┘
+# 3. Run the demo
+./run-demo-docker.sh
 ```
 
-## 🚀 Quick Start
+Press `d` in the demo to start processing!
 
-### Prerequisites
-
-- Go 1.25+
-- Docker & Docker Compose
-- Python 3.9+ (for generation service)
-- API Keys:
-  - Google API Key (for Gemini)
-  - Fal.ai API Key (for TTS)
-  - Cohere or OpenAI API Key (for embeddings)
-
-### One-Command Demo
-
-The fastest way to see everything in action:
+### Local Development Mode
 
 ```bash
 ./run-demo.sh
 ```
 
-This automatically:
+## 📋 Prerequisites
 
-1. ✅ Starts ChromaDB (if not running)
-2. ✅ Starts Generation Service (if not running)
-3. ✅ Starts API Server (if not running)
-4. ✅ Launches the interactive demo
-5. 🧹 Cleans up all services on exit
+- Docker & Docker Compose
+- Go 1.24+
+- Python 3.9+ (for local generation service)
+- API Keys:
+  - **Google Gemini API** - For script generation
+  - **FAL.ai API** - For video/audio generation
+  - **YouTube OAuth** - For uploading (see [creation_service/README.md](creation_service/README.md))
+  - **Cohere or OpenAI** - For embeddings (deduplication)
 
-**Press `d` when the demo starts to begin the workflow!**
+## 🏗️ Architecture
 
-### Manual Setup
-
-If you prefer manual control:
-
-#### 1. Start ChromaDB
-
-```bash
-docker-compose up -d chroma
-
-# Verify it's running
-docker ps | grep chroma
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Infrastructure Layer                      │
+│  ┌──────────┐  ┌────────┐  ┌────────┐  ┌─────────────┐    │
+│  │Zookeeper │  │ Kafka  │  │Kafka UI│  │  ChromaDB   │    │
+│  │  :2181   │  │:9092/93│  │ :8090  │  │   :8000     │    │
+│  └──────────┘  └────────┘  └────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Application Services                       │
+│                                                              │
+│  📥 ingestion_service (:8080)                               │
+│     • Fetches RSS feeds                                     │
+│     • Extracts article content                              │
+│     • Deduplicates via ChromaDB                             │
+│                  ↓                                           │
+│  🤖 generation_service (:8002)                              │
+│     • Generates video scripts (Gemini)                      │
+│     • Creates videos & audio (FAL.ai)                       │
+│     • Publishes to Kafka                                    │
+│                  ↓                                           │
+│  📤 creation_service (Kafka Consumer)                       │
+│     • Processes videos with FFmpeg                          │
+│     • Uploads to YouTube                                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### 2. Configure Environment
-
-```bash
-# Required: Embeddings provider (choose one)
-export COHERE_API_KEY=your_cohere_key
-# OR
-export OPENAI_API_KEY=your_openai_key
-
-# Optional: S3 storage
-export S3_BUCKET=your-bucket
-export S3_REGION=us-east-1
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-
-# Optional: Generation service credentials
-export GOOGLE_API_KEY=your_gemini_key
-export FAL_KEY=your_fal_key
-```
-
-#### 3. Start API Server
-
-```bash
-go build -o brainbot main.go
-./brainbot
-```
-
-The API server will be available at `http://localhost:8080`
-
-#### 4. (Optional) Start Generation Service
-
-```bash
-cd generation_service
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Set custom port to avoid conflict with ChromaDB
-PORT=8002 python -m app.main
-```
-
-#### 5. Run the Demo
-
-```bash
-export API_URL=http://localhost:8080
-export GENERATION_SERVICE_URL=http://localhost:8002
-go run cmd/demo/main.go
-```
-
-## API Endpoints
-
-Full API documentation: [api/API_REFERENCE.md](api/API_REFERENCE.md)
-
-### Quick Reference
-
-```bash
-# Health check
-curl http://localhost:8080/api/health
-
-# Trigger RSS refresh
-curl -X POST http://localhost:8080/api/rss/refresh
-
-# Get article count
-curl http://localhost:8080/api/deduplication/count
-
-# Process an article
-curl -X POST http://localhost:8080/api/deduplication/process \
-  -H "Content-Type: application/json" \
-  -d '{"article": {...}}'
-
-# List ChromaDB articles
-curl "http://localhost:8080/api/chroma/articles?limit=10"
-
-# Clear deduplication cache
-curl -X DELETE http://localhost:8080/api/deduplication/clear
-```
-
-## Services
-
-### API Server (Main)
-
-**Port:** 8080 (default)  
-**Purpose:** Unified gateway for all operations
-
-Endpoints:
-
-- `/api/health` - Health check
-- `/api/articles` - Article management
-- `/api/chroma/*` - ChromaDB access
-- `/api/deduplication/*` - Deduplication service
-- `/api/rss/refresh` - RSS orchestrator
-
-**Documentation:** [api/API_REFERENCE.md](api/API_REFERENCE.md)
-
-### Generation Service
-
-**Port:** 8002 (configurable)  
-**Purpose:** AI-powered script, audio, and subtitle generation
-
-Endpoints:
-
-- `/health` - Health check
-- `/generate` - Generate content from articles
-
-**Documentation:** [generation_service/README.md](generation_service/README.md)
-
-### ChromaDB
-
-**Port:** 8000  
-**Purpose:** Vector database for deduplication
-
-Managed via Docker Compose. See [docker-compose.yml](docker-compose.yml)
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# API Server
-PORT=8080
-CHROMA_HOST=localhost
-CHROMA_PORT=8000
-CHROMA_COLLECTION=brainbot_articles
-
-# Embeddings (choose one)
-COHERE_API_KEY=your_key
-# OR
-OPENAI_API_KEY=your_key
-OPENAI_ORG_ID=your_org  # optional
-
-# RSS Feed
-RSS_FEED_PRESET=st  # cna, st, hn, tr
-
-# S3 (optional)
-S3_BUCKET=your-bucket
-S3_REGION=us-east-1
-S3_PREFIX=articles/
-
-# Generation Service
-GOOGLE_API_KEY=your_gemini_key
-FAL_KEY=your_fal_key
-WEBHOOK_URL=your_webhook_url
-
-# Demo
-API_URL=http://localhost:8080
-GENERATION_SERVICE_URL=http://localhost:8002
-WEBHOOK_PORT=9999
-```
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 brainbot-464/
-├── api/                      # API controllers & routing
-│   ├── server.go             # Server setup & route registration
-│   ├── healthcontroller.go   # Health endpoint
-│   ├── articlescontroller.go # Articles management
-│   ├── chromacontroller.go   # ChromaDB access
-│   ├── deduplicationcontroller.go  # Deduplication endpoints
-│   ├── rsscontroller.go      # RSS orchestrator trigger
-│   └── API_REFERENCE.md      # API documentation
-├── app/                      # Application client library
-│   └── app.go                # HTTP client for all services
-├── cmd/demo/                 # Interactive demo
-│   └── main.go               # Terminal UI demo
-├── deduplication/            # Deduplication service
-│   ├── deduplicator.go       # Core deduplication logic
-│   ├── embeddings.go         # Embeddings API clients
-│   └── chroma.go             # ChromaDB REST wrapper
-├── generation_service/       # AI generation microservice
-│   ├── app/
-│   │   ├── main.py           # FastAPI server
-│   │   ├── services/         # Gemini & Fal.ai clients
-│   │   └── api/schemas.py    # Request/response models
-│   └── README.md             # Generation service docs
-├── orchestrator/             # End-to-end pipeline
-│   └── orchestrator.go       # Fetch → Extract → Dedupe → S3
-├── rssfeeds/                 # RSS fetching & extraction
-│   ├── fetcher.go            # RSS/Atom parsing
-│   ├── extractor.go          # Content extraction
-│   └── config.go             # Feed presets
-├── types/                    # Shared data models
-│   └── article.go            # Article struct
-├── common/                   # Shared utilities
-│   └── s3.go                 # S3 client wrapper
-├── main.go                   # API server entry point
-├── docker-compose.yml        # Docker services
-├── run-demo.sh              # One-command demo script
-└── README.md                 # This file
+├── ingestion_service/      # RSS ingestion & deduplication
+├── generation_service/     # AI content generation  
+├── creation_service/       # Video creation & upload
+├── demo/                  # Interactive demo client
+├── docker-compose.yml     # Service orchestration
+└── run-demo-docker.sh     # Docker demo runner
 ```
 
-## Interactive Demo
+See individual service READMEs for details:
+- [ingestion_service/README.md](ingestion_service/README.md)
+- [generation_service/README.md](generation_service/README.md)
+- [creation_service/README.md](creation_service/README.md)
 
-The demo showcases the complete integration:
+## 🔧 Setup Instructions
 
-1. Fetches RSS feed articles
-2. Extracts full content
-3. Deduplicates against ChromaDB
-4. Sends new articles to generation service
-5. Receives results via webhook
-6. Displays generated audio & subtitles
+### 1. Clone & Install Dependencies
 
+```bash
+git clone <repository-url>
+cd brainbot-464
+
+# Go dependencies
+go mod download
+
+# Python dependencies (for local mode)
+cd generation_service
+python -m venv venv
+source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+pip install -r requirements.txt
+cd ..
+```
+
+### 2. Configure Environment
+
+Create `.env` file in project root:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your API keys:
+
+```env
+# Generation Service
+GEMINI_API_KEY=your_gemini_api_key
+FAL_KEY=your_fal_api_key
+
+# Ingestion Service (choose one)
+COHERE_API_KEY=your_cohere_key
+# OR
+OPENAI_API_KEY=your_openai_key
+```
+
+### 3. Set Up YouTube OAuth
+
+```bash
+cd creation_service/scripts
+./setup_creation_service_credentials.sh
+```
+
+This will guide you through YouTube OAuth setup and create `creation_service/.secrets/youtube.env`.
+
+### 4. Start Services
+
+**Docker Mode:**
+```bash
+./run-demo-docker.sh
+```
+
+**Local Mode:**
 ```bash
 ./run-demo.sh
-# Press 'd' to start the demo workflow
-# Press 'q' to quit
 ```
 
-See [demo/README.md](demo/README.md) for details.
+## 🎮 Demo Instructions
 
-## Docker Deployment
+Once services are running:
 
-### Using Docker Compose
+1. The demo client will start automatically
+2. Press `d` to trigger the RSS processing workflow
+3. Watch as articles are:
+   - Fetched from RSS feeds
+   - Deduplicated against existing content
+   - Sent to generation service for AI processing
+   - Created into videos and uploaded to YouTube
+
+4. Press `q` to quit
+
+### Demo Features
+
+- **Interactive UI** - Real-time status updates
+- **Webhook Server** - Receives generation results
+- **Progress Tracking** - See each step in the pipeline
+- **Error Handling** - Clear error messages if something fails
+
+## 🐳 Docker Commands
 
 ```bash
-# Create .env file with your API keys
-cp .env.example .env
-# Edit .env with your credentials
-
 # Start all services
-docker-compose up -d --build
+docker-compose up -d
 
-# Check status
-docker-compose ps
+# View logs (all services)
+docker-compose logs -f
 
-# View logs
-docker-compose logs -f app
+# View logs (specific service)
+docker-compose logs -f ingestion-service
+docker-compose logs -f generation-service
+docker-compose logs -f creation-service
 
 # Stop services
 docker-compose down
 
-# Stop and remove volumes
+# Rebuild after code changes
+docker-compose build
+docker-compose up -d
+
+# Reset everything (including data)
 docker-compose down -v
 ```
 
-### Production Deployment
+## 🛠️ Development
 
-See individual service documentation:
+### Build Services
 
-- API Server: Build with `go build -o brainbot main.go`
-- Generation Service: [generation_service/README.md](generation_service/README.md)
-- ChromaDB: Use official Docker image
+```bash
+# Ingestion service
+cd ingestion_service && go build -o ingestion-server main.go
 
-## Development
+# Generation service
+cd generation_service && pip install -r requirements.txt
+
+# Creation service
+cd creation_service && go build -o creation-service main.go
+
+# Demo client
+go build -o demo demo/main.go
+```
+
+### Run Individual Services Locally
+
+```bash
+# Ingestion service
+cd ingestion_service && go run main.go
+
+# Generation service
+cd generation_service
+source venv/bin/activate
+export PORT=8002
+python -m app.main
+
+# Creation service (Kafka consumer mode)
+cd creation_service
+source .secrets/youtube.env
+export KAFKA_BOOTSTRAP_SERVERS=localhost:9093
+go run main.go -kafka
+
+# Creation service (API mode)
+go run main.go -port :8081
+
+# Demo client
+export API_URL=http://localhost:8080
+export GENERATION_SERVICE_URL=http://localhost:8002
+go run demo/main.go
+```
 
 ### Run Tests
 
@@ -330,160 +249,163 @@ cd generation_service
 pytest app/tests/
 ```
 
-### Build Binaries
+## 📊 Service Endpoints
+
+| Service | Port | Health Check | Purpose |
+|---------|------|--------------|---------|
+| Ingestion Service | 8080 | `GET /api/health` | RSS & Deduplication |
+| Generation Service | 8002 | `GET /health` | AI Content Generation |
+| ChromaDB | 8000 | `GET /api/v1/heartbeat` | Vector Database |
+| Kafka UI | 8090 | http://localhost:8090 | Kafka Monitoring |
+| Kafka | 9092/9093 | - | Message Queue |
+
+### API Examples
 
 ```bash
-# API server
-go build -o brainbot main.go
-
-# Demo
-go build -o demo_bin cmd/demo/main.go
-```
-
-### Local Development
-
-```bash
-# Start dependencies
-docker-compose up -d chroma
-
-# Run API server
-go run main.go
-
-# Run demo (in another terminal)
-go run cmd/demo/main.go
-```
-
-## Troubleshooting
-
-### ChromaDB Issues
-
-**Container won't start:**
-
-```bash
-# Check if port 8000 is in use
-lsof -i :8000
-
-# Remove existing container
-docker stop brainbot-chroma && docker rm brainbot-chroma
-
-# Start fresh
-docker-compose up -d chroma
-```
-
-**Connection errors:**
-
-```bash
-# Test ChromaDB connectivity
-curl http://localhost:8000/
-
-# Should return 404 (ChromaDB is running but endpoint doesn't exist)
-```
-
-### Generation Service Issues
-
-**Port conflict:**
-
-```bash
-# Check what's using the port
-lsof -i :8002
-
-# Use a different port
-PORT=8003 python -m app.main
-```
-
-**API key errors:**
-
-```bash
-# Verify environment variables are set
-echo $GOOGLE_API_KEY
-echo $FAL_KEY
-
-# Check generation service logs
-cat generation_service.log
-```
-
-### API Server Issues
-
-**Build errors:**
-
-```bash
-# Clean and rebuild
-go clean
-go mod tidy
-go mod download
-go build -o brainbot main.go
-```
-
-**Can't connect to ChromaDB:**
-
-```bash
-# Verify ChromaDB is running
-docker ps | grep chroma
-
-# Check environment variables
-echo $CHROMA_HOST
-echo $CHROMA_PORT
-```
-
-### Demo Issues
-
-**Connection refused:**
-
-```bash
-# Ensure API server is running
+# Check ingestion service health
 curl http://localhost:8080/api/health
 
-# Check environment variables
-echo $API_URL
-echo $GENERATION_SERVICE_URL
+# Check deduplication count
+curl http://localhost:8080/api/deduplication/count
+
+# Process article for deduplication
+curl -X POST http://localhost:8080/api/deduplication/process \
+  -H "Content-Type: application/json" \
+  -d '{
+    "article": {
+      "id": "test-123",
+      "title": "Test Article",
+      "content": "Article content here..."
+    }
+  }'
+
+# Generate video content
+curl -X POST http://localhost:8002/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Test Article",
+    "content": "Article content...",
+    "url": "https://example.com/article"
+  }'
 ```
 
-## Key Differences from Old Architecture
+## 🔍 Monitoring & Debugging
 
-### Before (Monolithic)
+### View Logs
 
-```go
-// Demo directly imported deduplication
-import "brainbot/deduplication"
-
-deduplicator, _ := deduplication.NewDeduplicator(config)
-result, _ := deduplicator.ProcessArticle(article)
+**Docker Mode:**
+```bash
+docker-compose logs -f ingestion-service
+docker-compose logs -f generation-service
+docker-compose logs -f creation-service
+docker-compose logs -f kafka
 ```
 
-### After (Microservices)
-
-```go
-// Demo uses HTTP client
-import "brainbot/app"
-
-client := app.NewClient("http://localhost:8080")
-result, _ := client.ProcessArticle(ctx, article)
+**Local Mode:**
+```bash
+tail -f api_server.log
+tail -f generation_service.log
+tail -f creation_service.log
 ```
 
-**Benefits:**
+### Monitor Kafka Messages
 
-- Loose coupling between services
-- Network-based communication
-- Independent scaling
-- Clear service boundaries
-- Easier testing with API mocks
+Open Kafka UI: http://localhost:8090
 
-## Contributing
+Browse topics, view messages, and monitor consumer groups.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+### Check Service Health
 
-## License
+```bash
+# All health checks
+curl http://localhost:8080/api/health
+curl http://localhost:8002/health
+curl http://localhost:8000/api/v1/heartbeat
+
+# Check if ports are in use
+lsof -i :8080 :8002 :8000 :9093
+```
+
+### Common Issues
+
+**Services not starting:**
+```bash
+# Check logs
+docker-compose logs
+
+# Reset everything
+docker-compose down -v
+docker-compose up -d
+```
+
+**Build failures:**
+```bash
+# Clean rebuild
+docker-compose build --no-cache
+
+# For Go services
+go clean && go mod tidy
+```
+
+**Connection issues:**
+```bash
+# Verify services are running
+docker-compose ps
+
+# Check Docker network
+docker network inspect brainbot-464_brainbot-network
+```
+
+**ChromaDB issues:**
+```bash
+# Restart ChromaDB
+docker-compose restart chromadb
+
+# Clear ChromaDB data
+docker-compose down
+rm -rf chroma_data/*
+docker-compose up -d chromadb
+```
+
+## 📚 Service Details
+
+### Ingestion Service
+
+Handles RSS feed processing and deduplication:
+- Fetches articles from RSS feeds
+- Extracts full content using Mozilla Readability
+- Deduplicates using vector embeddings (ChromaDB)
+- Exposes REST API for article processing
+
+See [ingestion_service/README.md](ingestion_service/README.md) for details.
+
+### Generation Service
+
+AI-powered content generation:
+- Generates video scripts using Google Gemini
+- Creates videos and audio using FAL.ai
+- Generates subtitles/captions
+- Publishes results to Kafka
+
+See [generation_service/README.md](generation_service/README.md) for details.
+
+### Creation Service
+
+Video processing and upload:
+- Consumes video requests from Kafka
+- Processes videos with FFmpeg
+- Uploads to YouTube with metadata
+- Supports API, Kafka, and batch modes
+
+See [creation_service/README.md](creation_service/README.md) for details.
+
+## 🔐 Security
+
+- **Never commit credentials** - All secrets are in `.env` or `.secrets/` (gitignored)
+- **YouTube OAuth tokens** - Stored in `creation_service/.secrets/youtube.env`
+- **API keys** - Loaded from environment variables only
+- **Docker secrets** - Use environment variables or Docker secrets in production
+
+## 📝 License
 
 See [LICENSE](LICENSE) file for details.
-
-## Support
-
-For issues or questions:
-
-- Open a GitHub issue
-- Check documentation in each service directory
-- Review API reference docs

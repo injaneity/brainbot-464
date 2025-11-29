@@ -1,0 +1,52 @@
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dependencies
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Data directories
+chroma_data/
+outputs/
+inputs/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Other services
+generation_service/
+creation_service/
+
+# Demo and utilities
+demo/
+utils/
+scripts/
+
+# Documentation
+README.md
+LICENSE
+*.md

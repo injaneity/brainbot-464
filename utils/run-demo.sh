@@ -189,6 +189,6 @@ export WEBHOOK_PORT=9999
 export GENERATION_SERVICE_URL=http://localhost:8002
 
 # Run the demo (this will block until demo exits)
-go run cmd/demo/main.go
+go run demo/main.go
 
 # Cleanup will be called automatically by the trap

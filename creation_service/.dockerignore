@@ -1,0 +1,43 @@
+# Build artifacts
+creation_service
+test_video_generation
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Dependencies
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files (except for mounting)
+.env
+
+# Data directories
+inputs/
+outputs/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scripts (not needed in container)
+scripts/
+
+# Test files
+test_*
+
+# Documentation
+README.md
+*.md
