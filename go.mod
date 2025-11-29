@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.9
 
 require (
+	github.com/IBM/sarama v1.46.3
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cohere-ai/cohere-go/v2 v2.15.3
@@ -16,7 +17,6 @@ require (
 )
 
 require (
-	github.com/IBM/sarama v1.46.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect

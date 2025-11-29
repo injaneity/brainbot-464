@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: brainbot-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - brainbot-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: brainbot-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - brainbot-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: brainbot-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: brainbot
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - brainbot-network
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: brainbot-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    networks:
+      - brainbot-network
+
+  # Application Services
+  generation-service:
+    build:
+      context: ./generation_service
+      dockerfile: Dockerfile
+    container_name: brainbot-generation
+    ports:
+      - "8002:8000"
+    environment:
+      PORT: 8000
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+    - ./generation_service/.env:/app/.env:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: ingestion_service/Dockerfile
+    container_name: brainbot-ingestion
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      COHERE_API_KEY: ${COHERE_API_KEY}
+    depends_on:
+      chromadb:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+
+  creation-service:
+    build:
+      context: .
+      dockerfile: creation_service/Dockerfile
+    container_name: brainbot-creation
+    env_file:
+    - ./creation_service/.secrets/youtube.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_VIDEO_REQUESTS: video-processing-requests
+      KAFKA_CONSUMER_GROUP_ID: creation-service-consumer-group
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+    # Mount credentials if using file-based config
+    volumes:
+      - ./creation_service/.secrets:/root/.secrets:ro
+
+networks:
+  brainbot-network:
+    driver: bridge
+

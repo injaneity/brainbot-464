@@ -27,4 +27,12 @@ Place your test JSON file at `inputs/output_format.txt` before running.
 
 ## Notes
 
-For demo orchestration scripts (run-demo.sh, download_background.ps1), see `utils/` folder in the root directory.
+## Background Video Download
+
+Use `download_background.ps1` (PowerShell) to download YouTube videos for background footage:
+
+```powershell
+.\download_background.ps1
+```
+
+Edit the `$videoUrl` variable in the script to change the source video.
