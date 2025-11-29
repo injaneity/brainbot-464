@@ -78,7 +78,7 @@ brainbot-464/
 ├── creation_service/       # Video creation & upload
 ├── demo/                  # Interactive demo client
 ├── docker-compose.yml     # Service orchestration
-└── run-demo-docker.sh     # Docker demo runner
+└── run-demo.sh            # Unified demo runner
 ```
 
 See individual service READMEs for details:
@@ -137,15 +137,15 @@ This will guide you through YouTube OAuth setup and create `creation_service/.se
 
 ### 4. Start Services
 
-**Docker Mode:**
 ```bash
-./run-demo-docker.sh
+# Auto-detects and uses Docker if available (recommended)
+./run-demo.sh
+
+# Or force local mode
+./run-demo.sh --local
 ```
 
-**Local Mode:**
-```bash
-./run-demo.sh
-```
+Press 'd' in the demo to start processing!
 
 ## 🎮 Demo Instructions
 

@@ -41,9 +41,8 @@ Thumbs.db
 generation_service/
 creation_service/
 
-# Demo and utilities
+# Demo
 demo/
-utils/
 scripts/
 
 # Documentation

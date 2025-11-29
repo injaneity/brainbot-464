@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Complete demo runner with Kafka integration
-# This script orchestrates the entire BrainBot demo with Kafka message queue
+# BrainBot Demo Runner
+# Auto-detects Docker and runs in the best available mode
+# Usage: ./run-demo.sh [--docker|--local]
 
 set -e
 
@@ -12,15 +13,89 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Track services we started
-API_SERVER_STARTED=false
-API_SERVER_PID=""
-GEN_SERVICE_STARTED=false
-GEN_SERVICE_PID=""
-CREATION_SERVICE_STARTED=false
-CREATION_SERVICE_PID=""
-CHROMA_STARTED=false
-KAFKA_STARTED=false
+echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║      🤖 BrainBot Demo Runner          ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo ""
+
+# Auto-detect mode: prefer Docker if available, unless --local is specified
+if [ "$1" = "--local" ]; then
+    MODE="local"
+    echo -e "${YELLOW}Running in LOCAL mode (services on host)${NC}"
+elif command -v docker &> /dev/null && command -v docker-compose &> /dev/null; then
+    MODE="docker"
+    echo -e "${YELLOW}Running in DOCKER mode (recommended)${NC}"
+    echo -e "${BLUE}Tip: Use --local flag to run services on host instead${NC}"
+else
+    MODE="local"
+    echo -e "${YELLOW}Docker not found, running in LOCAL mode${NC}"
+fi
+echo ""
+
+if [ "$MODE" = "docker" ]; then
+    # ============ DOCKER MODE ============
+    SERVICES_STARTED=false
+    
+    cleanup() {
+        echo ""
+        echo -e "${YELLOW}Cleaning up services...${NC}"
+        if [ "$SERVICES_STARTED" = true ]; then
+            docker-compose down
+        fi
+        echo -e "${GREEN}Cleanup complete${NC}"
+    }
+    
+    trap cleanup EXIT INT TERM
+    
+    # Check credentials
+    CREATION_ENV_FILE="creation_service/.secrets/youtube.env"
+    if [ ! -f "$CREATION_ENV_FILE" ]; then
+        echo -e "${RED}Missing $CREATION_ENV_FILE${NC}"
+        echo -e "${YELLOW}Run: creation_service/scripts/setup_creation_service_credentials.sh${NC}"
+        exit 1
+    fi
+    
+    if [ -z "$GEMINI_API_KEY" ] || [ -z "$FAL_KEY" ]; then
+        echo -e "${YELLOW}Warning: GEMINI_API_KEY or FAL_KEY not set${NC}"
+        read -p "Continue? (y/n) " -n 1 -r
+        echo
+        [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+    fi
+    
+    set -a
+    source "$CREATION_ENV_FILE"
+    set +a
+    
+    echo -e "${BLUE}Building and starting services...${NC}"
+    docker-compose up -d --build
+    SERVICES_STARTED=true
+    echo ""
+    
+    wait_for_service() {
+        local url=$1 name=$2 max=60 attempt=0
+        echo -e "${YELLOW}Waiting for $name...${NC}"
+        while [ $attempt -lt $max ]; do
+            curl -s "$url" >/dev/null 2>&1 && { echo -e "${GREEN}✓ $name ready${NC}"; return 0; }
+            ((attempt++)); sleep 2
+        done
+        echo -e "${RED}✗ $name timeout${NC}"; return 1
+    }
+    
+    wait_for_service "http://localhost:8090" "Kafka UI" || exit 1
+    wait_for_service "http://localhost:8000/api/v1/heartbeat" "ChromaDB" || exit 1
+    wait_for_service "http://localhost:8002/health" "Generation" || true
+    wait_for_service "http://localhost:8080/api/health" "API" || exit 1
+    
+else
+    # ============ LOCAL MODE ============
+    API_SERVER_STARTED=false
+    API_SERVER_PID=""
+    GEN_SERVICE_STARTED=false
+    GEN_SERVICE_PID=""
+    CREATION_SERVICE_STARTED=false
+    CREATION_SERVICE_PID=""
+    CHROMA_STARTED=false
+    KAFKA_STARTED=false
 
 # Cleanup function
 cleanup() {
@@ -217,40 +292,35 @@ fi
 echo ""
 
 # Step 6: Display status
-echo -e "${BLUE}Step 6/6: All services ready!${NC}"
+echo -e "${BLUE}All services ready!${NC}"
 echo ""
 
 # Display service status
 echo -e "${BLUE}═══════════════════════════════════════${NC}"
-echo -e "${GREEN}Services Status:${NC}"
-echo -e "  Kafka:              http://localhost:9093 ✓"
+echo -e "${GREEN}Services Running:${NC}"
 echo -e "  Kafka UI:           http://localhost:8090 ✓"
 echo -e "  ChromaDB:           http://localhost:8000 ✓"
 echo -e "  Generation Service: http://localhost:8002 ✓"
-echo -e "  Creation Service:   Kafka Consumer Mode ✓"
-echo -e "  API Server:         http://localhost:8080 ✓"
+echo -e "  API Service:        http://localhost:8080 ✓"
+echo -e "  Creation Service:   Kafka Consumer ✓"
 echo -e "${BLUE}═══════════════════════════════════════${NC}"
 echo ""
 
-# Show logs locations
-echo -e "${YELLOW}Service Logs:${NC}"
-echo -e "  API Server:         tail -f api_server.log"
-echo -e "  Generation Service: tail -f generation_service.log"
-echo -e "  Creation Service:   tail -f creation_service.log"
-echo -e "  ChromaDB:           docker logs brainbot-chroma"
-echo -e "  Kafka:              docker logs brainbot-kafka"
-echo ""
+if [ "$MODE" = "local" ]; then
+    echo -e "${YELLOW}Service Logs:${NC}"
+    echo -e "  tail -f api_server.log"
+    echo -e "  tail -f generation_service.log"
+    echo -e "  tail -f creation_service.log"
+    echo ""
+fi
 
-echo -e "${GREEN}Architecture:${NC}"
-echo -e "  RSS Feed → API Server → Generation Service → Kafka → Creation Service → YouTube"
-echo ""
+fi  # Close local mode block
 
-# Export environment variables for the demo
+# Common: Run the demo
 export API_URL=http://localhost:8080
 export WEBHOOK_PORT=9999
 export GENERATION_SERVICE_URL=http://localhost:8002
 
-# Run the demo (this will block until demo exits)
 echo -e "${GREEN}Starting demo client...${NC}"
 echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
 echo -e "${YELLOW}Press 'q' or Ctrl+C to quit${NC}"
