@@ -4,7 +4,6 @@ import (
 	"brainbot/demo/client"
 	"brainbot/ingestion_service/types"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -33,7 +32,6 @@ type Model struct {
 	DedupResults    []client.ArticleResult
 	GenerationUUID  string
 	WebhookPayload  *WebhookPayload
-	WebhookServer   *http.Server
 	WebhookPort     string
 	WebhookReceived bool
 	Err             error
@@ -41,13 +39,12 @@ type Model struct {
 }
 
 // NewModel creates a new TUI model
-func NewModel(webhookPort string, server *http.Server, appClient *client.Client) Model {
+func NewModel(webhookPort string, appClient *client.Client) Model {
 	return Model{
-		State:         StateIdle,
-		AppClient:     appClient,
-		WebhookPort:   webhookPort,
-		WebhookServer: server,
-		Logs:          make([]string, 0, 10),
+		State:       StateIdle,
+		AppClient:   appClient,
+		WebhookPort: webhookPort,
+		Logs:        make([]string, 0, 10),
 	}
 }
 

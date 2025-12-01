@@ -31,39 +31,34 @@ func main() {
 	apiURL := client.GetEnvOrDefault("API_URL", "http://localhost:8080")
 	appClient := client.NewClient(apiURL)
 
-	// Create the tea program first (without model)
-	var program *tea.Program
+	// Create the model (without server reference - managed externally)
+	m := tui.NewModel(webhookPort, appClient)
 
-	// Start webhook server with the program (we'll pass it after creation)
-	// For now, we create a placeholder and update it after program creation
-	m := tui.NewModel(webhookPort, nil, appClient)
-	program = tea.NewProgram(m)
+	// Create the tea program
+	program := tea.NewProgram(m)
 
-	// Now start the webhook server with the program reference
+	// Start webhook server (managed OUTSIDE the model)
+	// The server sends messages to the program, but isn't part of the model
 	server, err := tui.StartWebhookServer(webhookPort, program)
 	if err != nil {
 		fmt.Printf("Failed to start webhook server: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Update model with server reference
-	// Note: Since Model uses value semantics, we need to create a new model with the server
-	// and send it to the program. However, since the program already started with the old model,
-	// we store the server in the model that will be used during updates.
-	// The server is a pointer, so all model copies share the same server instance.
-	m.WebhookServer = server
-
 	// Handle graceful shutdown
+	// Server lifecycle is managed here in main(), not in the TUI
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
+		// Shutdown server first
 		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_ = server.Shutdown(ctx)
 		}
+		// Then quit the program
 		program.Quit()
 	}()
 
@@ -73,7 +68,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Clean up
+	// Clean up server after program exits
 	if server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

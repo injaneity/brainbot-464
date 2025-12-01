@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,9 +31,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
-		if m.WebhookServer != nil {
-			_ = m.WebhookServer.Shutdown(context.Background())
-		}
 		return m, tea.Quit
 	case "d", "D":
 		if m.State == StateIdle {
