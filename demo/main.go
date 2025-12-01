@@ -2,548 +2,56 @@ package main
 
 import (
 	"brainbot/demo/client"
-	"brainbot/ingestion_service/types"
-	"bytes"
+	"brainbot/demo/tui"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4")).
-			MarginTop(1).
-			MarginBottom(1)
-
-	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575"))
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000"))
-
-	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262"))
-
-	boxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
-			Padding(1, 2)
-
-	highlightStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#7D56F4")).
-			Padding(0, 1)
-)
-
-// Messages for the tea program
-type fetchCompleteMsg struct {
-	articles []*types.Article
-	err      error
-}
-
-type cacheClearedMsg struct {
-	err error
-}
-
-type deduplicationCompleteMsg struct {
-	results []ArticleResult
-	err     error
-}
-
-type generationRequestSentMsg struct {
-	uuid string
-	err  error
-}
-
-type webhookReceivedMsg struct {
-	payload WebhookPayload
-}
-
-type errorMsg struct {
-	err error
-}
-
-// ArticleResult represents deduplication results
-type ArticleResult = client.ArticleResult
-
-// WebhookPayload represents the generation service response
-type WebhookPayload struct {
-	UUID               string                   `json:"uuid"`
-	Voiceover          string                   `json:"voiceover"`
-	SubtitleTimestamps []map[string]interface{} `json:"subtitle_timestamps"`
-	ResourceTimestamps map[string]interface{}   `json:"resource_timestamps"`
-	Status             string                   `json:"status"`
-	Error              *string                  `json:"error,omitempty"`
-	Timings            map[string]float64       `json:"timings,omitempty"`
-}
-
-// Model represents the application state
-type model struct {
-	state           string // "idle", "fetching", "deduplicating", "sending", "waiting", "complete", "error"
-	appClient       *client.Client
-	articles        []*types.Article
-	dedupResults    []ArticleResult
-	generationUUID  string
-	webhookPayload  *WebhookPayload
-	webhookServer   *http.Server
-	webhookPort     string
-	webhookReceived bool
-	err             error
-	logs            []string
-}
-
-func initialModel(webhookPort string, server *http.Server, appClient *client.Client) model {
-	return model{
-		state:         "idle",
-		appClient:     appClient,
-		webhookPort:   webhookPort,
-		webhookServer: server,
-		logs:          []string{},
-	}
-}
-
-func (m model) Init() tea.Cmd {
-	// Don't start automatically - wait for user input
-	return nil
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			if m.webhookServer != nil {
-				_ = m.webhookServer.Shutdown(context.Background())
-			}
-			return m, tea.Quit
-		case "d", "D":
-			// Start the demo when user presses 'd'
-			if m.state == "idle" {
-				m.state = "clearing"
-				m.addLog("Clearing ChromaDB cache...")
-				return m, clearCacheAndFetch(m.appClient)
-			}
-		}
-
-	case cacheClearedMsg:
-		if msg.err != nil {
-			m.state = "error"
-			m.err = fmt.Errorf("failed to clear cache: %w", msg.err)
-			return m, nil
-		}
-		m.state = "fetching"
-		m.addLog("Cache cleared successfully")
-		return m, fetchArticles(m.appClient)
-
-	case fetchCompleteMsg:
-		if msg.err != nil {
-			m.state = "error"
-			m.err = msg.err
-			return m, nil
-		}
-		m.articles = msg.articles
-		m.state = "deduplicating"
-		m.addLog(fmt.Sprintf("Fetched %d articles", len(msg.articles)))
-		return m, deduplicateArticles(m.appClient, msg.articles)
-
-	case deduplicationCompleteMsg:
-		if msg.err != nil {
-			m.state = "error"
-			m.err = msg.err
-			return m, nil
-		}
-		m.dedupResults = msg.results
-		m.state = "sending"
-
-		// Count new articles
-		newCount := 0
-		for _, r := range msg.results {
-			if r.Status == "new" {
-				newCount++
-			}
-		}
-		m.addLog(fmt.Sprintf("Found %d new articles", newCount))
-
-		return m, sendGenerationRequest(m.dedupResults, m.webhookPort)
-
-	case generationRequestSentMsg:
-		if msg.err != nil {
-			m.state = "error"
-			m.err = msg.err
-			return m, nil
-		}
-		m.generationUUID = msg.uuid
-		m.state = "waiting"
-		m.addLog(fmt.Sprintf("Generation request sent with UUID: %s", msg.uuid))
-		return m, nil
-
-	case webhookReceivedMsg:
-		m.webhookPayload = &msg.payload
-		m.webhookReceived = true
-		m.state = "complete"
-		m.addLog("Webhook received from generation service!")
-		return m, nil
-
-	case errorMsg:
-		m.state = "error"
-		m.err = msg.err
-		return m, nil
-	}
-
-	return m, nil
-}
-
-func (m *model) addLog(logMsg string) {
-	m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), logMsg))
-	if len(m.logs) > 10 {
-		m.logs = m.logs[len(m.logs)-10:]
-	}
-}
-
-func (m model) View() string {
-	var b strings.Builder
-
-	// Title
-	b.WriteString(titleStyle.Render("🤖 BrainBot Integration Demo"))
-	b.WriteString("\n\n")
-
-	// Current state
-	stateText := ""
-	switch m.state {
-	case "idle":
-		stateText = highlightStyle.Render("👋 Ready to start!") + "\n\n" +
-			infoStyle.Render("Press 'd' to begin the demo")
-	case "clearing":
-		stateText = statusStyle.Render("🧹 Clearing ChromaDB cache...")
-	case "fetching":
-		stateText = statusStyle.Render("⏳ Fetching RSS feed...")
-	case "deduplicating":
-		stateText = statusStyle.Render("🔍 Deduplicating articles...")
-	case "sending":
-		stateText = statusStyle.Render("📤 Sending to generation service...")
-	case "waiting":
-		stateText = statusStyle.Render(fmt.Sprintf("⏰ Waiting for generation service (UUID: %s)...", m.generationUUID))
-	case "complete":
-		stateText = highlightStyle.Render("✅ COMPLETE")
-	case "error":
-		stateText = errorStyle.Render(fmt.Sprintf("❌ Error: %v", m.err))
-	}
-	b.WriteString(stateText)
-	b.WriteString("\n\n")
-
-	// Statistics
-	if len(m.articles) > 0 {
-		stats := fmt.Sprintf("📊 Articles fetched: %d", len(m.articles))
-		b.WriteString(infoStyle.Render(stats))
-		b.WriteString("\n")
-	}
-
-	if len(m.dedupResults) > 0 {
-		newCount := 0
-		dupCount := 0
-		for _, r := range m.dedupResults {
-			if r.Status == "new" {
-				newCount++
-			} else if r.Status == "duplicate" {
-				dupCount++
-			}
-		}
-		stats := fmt.Sprintf("   New: %d | Duplicates: %d", newCount, dupCount)
-		b.WriteString(infoStyle.Render(stats))
-		b.WriteString("\n")
-	}
-
-	// Webhook info
-	if m.webhookPort != "" && m.state != "error" {
-		webhookInfo := fmt.Sprintf("🌐 Webhook listening on: http://localhost:%s/webhook", m.webhookPort)
-		b.WriteString(infoStyle.Render(webhookInfo))
-		b.WriteString("\n\n")
-	}
-
-	// Logs
-	if len(m.logs) > 0 {
-		b.WriteString(infoStyle.Render("📝 Recent Activity:"))
-		b.WriteString("\n")
-		for _, logMsg := range m.logs {
-			b.WriteString(infoStyle.Render("   " + logMsg))
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	// Results
-	if m.state == "complete" && m.webhookPayload != nil {
-		resultBox := formatWebhookResult(m.webhookPayload)
-		b.WriteString(boxStyle.Render(resultBox))
-		b.WriteString("\n\n")
-	}
-
-	// Help text
-	if m.state == "idle" {
-		b.WriteString(infoStyle.Render("Press 'd' to start demo | Press 'q' or Ctrl+C to quit"))
-	} else if m.state != "complete" {
-		b.WriteString(infoStyle.Render("Press 'q' or Ctrl+C to quit"))
-	} else {
-		b.WriteString(highlightStyle.Render("Press 'q' or Ctrl+C to exit"))
-	}
-
-	return b.String()
-}
-
-func formatWebhookResult(payload *WebhookPayload) string {
-	var b strings.Builder
-
-	b.WriteString(highlightStyle.Render("Generation Service Result"))
-	b.WriteString("\n\n")
-
-	b.WriteString(fmt.Sprintf("Status: %s\n", statusStyle.Render(payload.Status)))
-	b.WriteString(fmt.Sprintf("UUID: %s\n\n", payload.UUID))
-
-	if payload.Error != nil && *payload.Error != "" {
-		b.WriteString(errorStyle.Render(fmt.Sprintf("Error: %s\n\n", *payload.Error)))
-	}
-
-	if payload.Voiceover != "" {
-		voiceoverPreview := payload.Voiceover
-		if len(voiceoverPreview) > 200 {
-			voiceoverPreview = voiceoverPreview[:200] + "..."
-		}
-		b.WriteString(fmt.Sprintf("Voiceover Preview:\n%s\n\n", infoStyle.Render(voiceoverPreview)))
-	}
-
-	if len(payload.SubtitleTimestamps) > 0 {
-		b.WriteString(fmt.Sprintf("Subtitle Segments: %d\n", len(payload.SubtitleTimestamps)))
-	}
-
-	if len(payload.Timings) > 0 {
-		b.WriteString("\nTimings:\n")
-		for key, val := range payload.Timings {
-			b.WriteString(fmt.Sprintf("  %s: %.2fs\n", key, val))
-		}
-	}
-
-	return b.String()
-}
-
-// Tea commands
-func clearCacheAndFetch(appClient *client.Client) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		err := appClient.ClearCache(ctx)
-		return cacheClearedMsg{err: err}
-	}
-}
-
-func fetchArticles(appClient *client.Client) tea.Cmd {
-	return func() tea.Msg {
-		// Load environment
-		_ = godotenv.Load()
-
-		ctx := context.Background()
-		articles, err := appClient.FetchArticles(ctx, "", 0)
-		if err != nil {
-			return fetchCompleteMsg{err: err}
-		}
-
-		return fetchCompleteMsg{articles: articles}
-	}
-}
-
-func deduplicateArticles(appClient *client.Client, articles []*types.Article) tea.Cmd {
-	return func() tea.Msg {
-		_ = godotenv.Load()
-
-		ctx := context.Background()
-		results, err := appClient.ProcessArticles(ctx, articles)
-		if err != nil {
-			return deduplicationCompleteMsg{err: err}
-		}
-
-		// Convert app.ArticleResult to local ArticleResult
-		for i, r := range results {
-			if r.Status == "new" {
-				log.Printf("Article %s: NEW - added to database", r.Article.Title)
-			} else if r.Status == "duplicate" {
-				log.Printf("Article %s: DUPLICATE (%.2f%% similar)", r.Article.Title, r.DeduplicationResult.SimilarityScore*100)
-			} else if r.Status == "failed" {
-				log.Printf("Article %s: FAILED extraction", r.Article.Title)
-			} else if r.Status == "error" {
-				log.Printf("Article %s: ERROR - %v", r.Article.Title, r.Error)
-			}
-			_ = i
-		}
-
-		return deduplicationCompleteMsg{results: results}
-	}
-}
-
-func sendGenerationRequest(results []ArticleResult, webhookPort string) tea.Cmd {
-	return func() tea.Msg {
-		_ = godotenv.Load()
-
-		// Collect new articles
-		var articleTexts []string
-		for _, r := range results {
-			if r.Status == "new" && r.Article != nil {
-				// Use full content text for generation
-				text := r.Article.FullContentText
-				if text == "" {
-					text = r.Article.Summary
-				}
-				articleTexts = append(articleTexts, text)
-			}
-		}
-
-		if len(articleTexts) == 0 {
-			return errorMsg{err: fmt.Errorf("no new articles to send for generation")}
-		}
-
-		// Generate UUID
-		reqUUID := uuid.New().String()
-
-		// Build webhook URL
-		webhookURL := fmt.Sprintf("http://localhost:%s/webhook", webhookPort)
-
-		// Build request
-		requestBody := map[string]interface{}{
-			"uuid":        reqUUID,
-			"articles":    articleTexts,
-			"webhook_url": webhookURL,
-		}
-
-		jsonData, err := json.Marshal(requestBody)
-		if err != nil {
-			return generationRequestSentMsg{err: err}
-		}
-
-		// Send to generation service
-		generationURL := getEnvOrDefault("GENERATION_SERVICE_URL", "http://localhost:8001")
-		url := fmt.Sprintf("%s/generate", generationURL)
-
-		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			return generationRequestSentMsg{err: fmt.Errorf("failed to send request: %w", err)}
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusAccepted {
-			body, _ := io.ReadAll(resp.Body)
-			return generationRequestSentMsg{err: fmt.Errorf("generation service returned %d: %s", resp.StatusCode, string(body))}
-		}
-
-		return generationRequestSentMsg{uuid: reqUUID}
-	}
-}
-
-func waitForWebhook(received bool) tea.Cmd {
-	return func() tea.Msg {
-		// This is handled by the webhook server
-		return nil
-	}
-}
-
-func getEnvOrDefault(key, defaultVal string) string {
-	return client.GetEnvOrDefault(key, defaultVal)
-}
-
-// Webhook server
-func startWebhookServer(port string, program *tea.Program) (*http.Server, error) {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload WebhookPayload
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&payload); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
-			return
-		}
-
-		// Send message to tea program (will work even if program is nil initially)
-		if program != nil {
-			program.Send(webhookReceivedMsg{payload: payload})
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"received"}`))
-	})
-
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
-	}
-
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Webhook server error: %v", err)
-		}
-	}()
-
-	// Wait a bit for server to start
-	time.Sleep(100 * time.Millisecond)
-
-	return server, nil
-}
 
 func main() {
 	// Parse command-line flags
 	clearCache := flag.Bool("clear", true, "Clear ChromaDB cache before starting (default: true)")
 	flag.Parse()
+	_ = clearCache // Store for later use if needed
 
 	// Load environment
 	_ = godotenv.Load()
 
-	// Note: Cache clearing is now done when user presses 'd' if clearCache is true
-	_ = clearCache // Store for later use if needed
-
 	// Set up webhook server
-	webhookPort := getEnvOrDefault("WEBHOOK_PORT", "9999")
+	webhookPort := client.GetEnvOrDefault("WEBHOOK_PORT", "9999")
 
 	// Create app client
-	apiURL := getEnvOrDefault("API_URL", "http://localhost:8080")
+	apiURL := client.GetEnvOrDefault("API_URL", "http://localhost:8080")
 	appClient := client.NewClient(apiURL)
 
-	// Create the model first
-	m := initialModel(webhookPort, nil, appClient)
+	// Create the tea program first (without model)
+	var program *tea.Program
 
-	// Create the tea program
-	program := tea.NewProgram(m)
+	// Start webhook server with the program (we'll pass it after creation)
+	// For now, we create a placeholder and update it after program creation
+	m := tui.NewModel(webhookPort, nil, appClient)
+	program = tea.NewProgram(m)
 
-	// Start webhook server with the program
-	server, err := startWebhookServer(webhookPort, program)
+	// Now start the webhook server with the program reference
+	server, err := tui.StartWebhookServer(webhookPort, program)
 	if err != nil {
 		fmt.Printf("Failed to start webhook server: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Update model with server reference
-	m.webhookServer = server
+	// Note: Since Model uses value semantics, we need to create a new model with the server
+	// and send it to the program. However, since the program already started with the old model,
+	// we store the server in the model that will be used during updates.
+	// The server is a pointer, so all model copies share the same server instance.
+	m.WebhookServer = server
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
