@@ -1,0 +1,22 @@
+package client
+
+import (
+	"brainbot/ingestion_service/types"
+	"time"
+)
+
+// ArticleResult represents the processing result for a single article
+type ArticleResult struct {
+	Article             *types.Article       `json:"article"`
+	Status              string               `json:"status"` // "new", "duplicate", "failed", "error"
+	DeduplicationResult *DeduplicationResult `json:"deduplication_result,omitempty"`
+	Error               string               `json:"error,omitempty"`
+}
+
+// DeduplicationResult contains the result of deduplication check
+type DeduplicationResult struct {
+	IsDuplicate     bool      `json:"is_duplicate"`
+	MatchingID      string    `json:"matching_id,omitempty"`
+	SimilarityScore float32   `json:"similarity_score,omitempty"`
+	CheckedAt       time.Time `json:"checked_at"`
+}
