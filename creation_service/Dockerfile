@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o creation-service main.go
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates ffmpeg
+RUN apk --no-cache add ca-certificates ffmpeg fontconfig ttf-dejavu
 
 WORKDIR /root/
 

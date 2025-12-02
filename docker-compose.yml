@@ -134,6 +134,7 @@ services:
     # Mount credentials if using file-based config
     volumes:
       - ./creation_service/.secrets:/root/.secrets:ro
+      - ./creation_service/outputs:/root/outputs
 
 networks:
   brainbot-network:
