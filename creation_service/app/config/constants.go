@@ -25,4 +25,8 @@ const (
 	// Title generation
 	MaxTitleWords  = 10
 	MaxTitleLength = 100
+
+	// Subtitle configuration
+	SubtitleFontSize     = 90
+	SubtitleMaxWordsLine = 5 // Max words per subtitle line
 )

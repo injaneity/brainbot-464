@@ -129,11 +129,9 @@ func GenerateMetadata(input app.VideoInput, articleTitle string, sourceURL strin
 	}
 
 	description := fmt.Sprintf(
-		"%s\n\n"+
-			"🔗 Source: %s\n\n"+
+		"🔗 Source: %s\n\n"+
 			"📱 Follow for daily tech updates!\n"+
 			"#tech #ai #technology #shorts",
-		articleTitle,
 		sourceURL,
 	)
 

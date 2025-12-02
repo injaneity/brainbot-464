@@ -10,6 +10,8 @@ import (
 	"brainbot/creation_service/app/config"
 	"brainbot/creation_service/app/kafka"
 	"brainbot/creation_service/app/services"
+	
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -18,6 +20,11 @@ const (
 )
 
 func main() {
+	// Load environment variables from .secrets/youtube.env
+	if err := godotenv.Load(".secrets/youtube.env"); err != nil {
+		log.Printf("⚠️  No .env file found, using system environment variables")
+	}
+	
 	// Command-line flags
 	batchMode := flag.Bool("batch", false, "Run in batch mode (process files from input/ directory)")
 	kafkaMode := flag.Bool("kafka", false, "Run in Kafka consumer mode (consume from Kafka topic)")
