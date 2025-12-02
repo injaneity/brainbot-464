@@ -45,7 +45,7 @@ func CreateVideo(input app.VideoInput, backgroundVideoPath string, outputPath st
 
 	videoWithSubs := ffmpeg.Filter(
 		[]*ffmpeg.Stream{video}, "subtitles", ffmpeg.Args{srtPathForFFmpeg},
-		ffmpeg.KwArgs{"force_style": "FontName=Consolas,FontSize=32,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,Bold=1"},
+		ffmpeg.KwArgs{"force_style": "FontName=DejaVu Sans,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,Bold=1"},
 	)
 
 	err := ffmpeg.Output([]*ffmpeg.Stream{videoWithSubs, audio}, outputPath, ffmpeg.KwArgs{
