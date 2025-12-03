@@ -14,5 +14,6 @@ func NewRouter() *gin.Engine {
 	// Register resource routers
 	RegisterDeduplicationRoutes(r)
 	RegisterHealthRoutes(r)
+	RegisterRSSRoutes(r)
 	return r
 }

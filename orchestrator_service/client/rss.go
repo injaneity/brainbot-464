@@ -1,49 +1,50 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"orchestrator/types"
-
-	"brainbot/ingestion_service/rssfeeds"
 )
 
-// FetchArticles fetches articles from RSS feed
+type FetchRequest struct {
+	FeedPreset string `json:"feed_preset"`
+	Count      int    `json:"count"`
+}
+
+// FetchArticles fetches articles from RSS feed via ingestion service
 func (c *IngestionClient) FetchArticles(ctx context.Context, feedPreset string, count int) ([]*types.Article, error) {
-	if feedPreset == "" {
-		feedPreset = rssfeeds.DefaultFeedPreset
-	}
-	if count == 0 {
-		count = rssfeeds.DefaultCount
+	reqBody := FetchRequest{
+		FeedPreset: feedPreset,
+		Count:      count,
 	}
 
-	feedURL := rssfeeds.ResolveFeedURL(feedPreset)
-	ingestArticles, err := rssfeeds.FetchFeed(feedURL, count)
+	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch articles: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Extract full content for all articles
-	rssfeeds.ExtractAllContent(ingestArticles)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/fetch", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-	// Convert ingestion service articles to orchestrator types
-	articles := make([]*types.Article, len(ingestArticles))
-	for i, a := range ingestArticles {
-		articles[i] = &types.Article{
-			ID:              a.ID,
-			Title:           a.Title,
-			URL:             a.URL,
-			PublishedAt:     a.PublishedAt,
-			FetchedAt:       a.FetchedAt,
-			Summary:         a.Summary,
-			Author:          a.Author,
-			Categories:      a.Categories,
-			FullContent:     a.FullContent,
-			FullContentText: a.FullContentText,
-			Excerpt:         a.Excerpt,
-			ImageURL:        a.ImageURL,
-			ExtractionError: a.ExtractionError,
-		}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ingestion service returned status: %d", resp.StatusCode)
+	}
+
+	var articles []*types.Article
+	if err := json.NewDecoder(resp.Body).Decode(&articles); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return articles, nil
