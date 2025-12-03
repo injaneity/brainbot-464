@@ -22,7 +22,7 @@ const (
 func main() {
 	// Load environment variables from .secrets/youtube.env
 	if err := godotenv.Load(".secrets/youtube.env"); err != nil {
-		log.Printf("⚠️  No .env file found, using system environment variables")
+		log.Printf("⚠️  No .secrets/youtube.env file found, using system environment variables")
 	}
 	
 	// Command-line flags

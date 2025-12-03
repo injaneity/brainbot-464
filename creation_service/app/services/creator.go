@@ -119,8 +119,19 @@ func groupIntoSentences(timestamps []app.SubtitleTimestamp, maxWordsPerLine int)
 		endsWithPeriod := false
 		trimmed := strings.TrimSpace(ts.Text)
 		if strings.HasSuffix(trimmed, ".") || strings.HasSuffix(trimmed, "!") || strings.HasSuffix(trimmed, "?") {
-			// Check if it's not a number like "4.5"
-			if len(trimmed) > 1 {
+			// Check if it's not a number like "4.5" or "2.3.4"
+			if strings.HasSuffix(trimmed, ".") && len(trimmed) > 2 {
+				secondToLast := trimmed[len(trimmed)-2]
+				thirdToLast := trimmed[len(trimmed)-3]
+				// If both sides of the period are digits, it's part of a number
+				if secondToLast >= '0' && secondToLast <= '9' && thirdToLast >= '0' && thirdToLast <= '9' {
+					endsWithPeriod = false
+				} else if secondToLast < '0' || secondToLast > '9' {
+					endsWithPeriod = true
+				} else {
+					endsWithPeriod = true
+				}
+			} else if strings.HasSuffix(trimmed, ".") && len(trimmed) > 1 {
 				secondToLast := trimmed[len(trimmed)-2]
 				if secondToLast < '0' || secondToLast > '9' {
 					endsWithPeriod = true
@@ -186,7 +197,7 @@ func generateASS(timestamps []app.SubtitleTimestamp, outputPath string) error {
 			for i, word := range sentence.Words {
 				if i == wordIdx {
 					// Current word is highlighted (yellow)
-					textParts = append(textParts, fmt.Sprintf("{\\c&H00FFFF&}%s{\\c&HFFFFFF&}", word.Text))
+					textParts = append(textParts, fmt.Sprintf("{\\c&H0000FFFF&}%s{\\c&H00FFFFFF&}", word.Text))
 				} else {
 					// Other words are white
 					textParts = append(textParts, word.Text)
@@ -196,14 +207,12 @@ func generateASS(timestamps []app.SubtitleTimestamp, outputPath string) error {
 			text := strings.Join(textParts, " ")
 			
 			// Use the actual word's timing
-			if wordIdx < len(sentence.Words) {
 				startTime = sentence.Words[wordIdx].Start
 				if wordIdx < len(sentence.Words)-1 {
 					endTime = sentence.Words[wordIdx+1].Start
 				} else {
 					endTime = sentence.Words[wordIdx].End
 				}
-			}
 			
 			fmt.Fprintf(file, "Dialogue: 0,%s,%s,Default,,0,0,0,,%s\n",
 				formatASSTimestamp(startTime),
