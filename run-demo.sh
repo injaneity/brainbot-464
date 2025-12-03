@@ -104,9 +104,6 @@ echo -e "${BLUE}Building TUI client...${NC}"
 go build -o bin/demo-client demo/main.go
 
 echo -e "${GREEN}Starting TUI client...${NC}"
-echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
-echo -e "${YELLOW}Press 'q' to detach (orchestrator keeps running)${NC}"
-echo -e "${YELLOW}Press 'x' to shutdown orchestrator and quit${NC}"
 echo ""
 
 EXIT_CODE=0

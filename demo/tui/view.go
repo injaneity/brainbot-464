@@ -70,9 +70,9 @@ func (m Model) View() string {
 
 	// Help text
 	if m.State == StateIdle || m.State == StateComplete || m.State == StateError {
-		b.WriteString(InfoStyle.Render("Press 'd' to start workflow | Press 'q' to detach | Press 'x' to shutdown orchestrator"))
+		b.WriteString(InfoStyle.Render(TextFooterIdle))
 	} else {
-		b.WriteString(InfoStyle.Render("Press 'q' to detach (workflow continues) | Press 'x' to shutdown orchestrator"))
+		b.WriteString(InfoStyle.Render(TextFooterRunning))
 	}
 
 	return b.String()

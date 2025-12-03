@@ -81,7 +81,7 @@ func (m Model) getStateText() string {
 	switch m.State {
 	case StateIdle:
 		return HighlightStyle.Render("👋 Ready to start!") + "\n\n" +
-			InfoStyle.Render("Press 'd' to begin the demo")
+			InfoStyle.Render(TextStartInstruction)
 	case StateClearing:
 		return StatusStyle.Render("🧹 Clearing ChromaDB cache...")
 	case StateFetching:
