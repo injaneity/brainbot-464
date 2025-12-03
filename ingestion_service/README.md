@@ -26,6 +26,18 @@ CHROMA_HOST=localhost
 CHROMA_PORT=8000
 CHROMA_COLLECTION=brainbot_articles
 
+# Redis (for Bloom Filter)
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# S3 Storage
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-1
+S3_PREFIX=articles/
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+
 # Embeddings API (choose one)
 COHERE_API_KEY=your_cohere_key
 # OR
@@ -147,12 +159,20 @@ const (
 │  Extractor  │  Extract full content
 └──────┬──────┘
        ↓
-┌─────────────┐
-│Deduplicator │  Check similarity
-└──────┬──────┘
+┌─────────────┐      ┌─────────────┐
+│Deduplicator │ ───→ │ Redis Bloom │  Exact match check
+└──────┬──────┘      └─────────────┘
+       │
+       │ (If not exact match)
        ↓
 ┌─────────────┐
-│  ChromaDB   │  Vector storage
+│  ChromaDB   │  Vector similarity check
+└──────┬──────┘
+       │
+       │ (If new or similar)
+       ↓
+┌─────────────┐
+│     S3      │  Store/Append content
 └─────────────┘
 ```
 

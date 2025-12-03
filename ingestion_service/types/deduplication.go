@@ -7,6 +7,7 @@ type ArticleResult struct {
 	Article             *Article             `json:"article"`
 	Status              string               `json:"status"` // "new", "duplicate", "failed", "error"
 	DeduplicationResult *DeduplicationResult `json:"deduplication_result,omitempty"`
+	PresignedURL        string               `json:"presigned_url,omitempty"`
 	Error               string               `json:"error,omitempty"`
 }
 
