@@ -65,8 +65,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./chroma/chroma_data:/data
-      - ./chroma/config.yaml:/config.yaml
+      - ./chroma_data:/data
     networks:
       - brainbot-network
 
