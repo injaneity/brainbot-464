@@ -70,6 +70,26 @@ services:
       - brainbot-network
 
   # Application Services
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator_service/Dockerfile
+    container_name: brainbot-orchestrator
+    ports:
+      - "8081:8081"
+      - "9999:9999"
+    environment:
+      API_URL: http://ingestion-service:8080
+      GENERATION_SERVICE_URL: http://generation-service:8000
+    depends_on:
+      ingestion-service:
+        condition: service_started
+      generation-service:
+        condition: service_started
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+
   generation-service:
     build:
       context: ./generation_service

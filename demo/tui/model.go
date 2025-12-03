@@ -1,76 +1,103 @@
 package tui
 
 import (
-	"brainbot/demo/client"
-	"brainbot/ingestion_service/types"
+	"brainbot/shared/rss"
+	"brainbot/shared/types"
 	"fmt"
+	"sort"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // State represents the application state machine
-type State string
+type State = types.State
 
 const (
-	StateIdle          State = "idle"
-	StateClearing      State = "clearing"
-	StateFetching      State = "fetching"
-	StateDeduplicating State = "deduplicating"
-	StateSending       State = "sending"
-	StateWaiting       State = "waiting"
-	StateComplete      State = "complete"
-	StateError         State = "error"
+	StateIdle          = types.StateIdle
+	StateClearing      = types.StateClearing
+	StateFetching      = types.StateFetching
+	StateDeduplicating = types.StateDeduplicating
+	StateSending       = types.StateSending
+	StateWaiting       = types.StateWaiting
+	StateComplete      = types.StateComplete
+	StateError         = types.StateError
 )
 
-// Model represents the application state
+// LogEntry represents a single log line with timestamp
+type LogEntry = types.LogEntry
+
+// WebhookPayload represents the generation service response
+type WebhookPayload = types.WebhookPayload
+
+// StatusResponse is the JSON response from orchestrator
+type StatusResponse = types.StatusResponse
+
+// Model represents the TUI client state (thin client)
 type Model struct {
-	State           State
-	AppClient       *client.Client
-	Articles        []*types.Article
-	DedupResults    []client.ArticleResult
-	GenerationUUID  string
-	WebhookPayload  *WebhookPayload
-	WebhookPort     string
-	WebhookReceived bool
-	Err             error
-	Logs            []string
+	// Orchestrator client
+	OrchestratorClient *OrchestratorClient
+
+	// Local UI state (synced from orchestrator)
+	State          State
+	Logs           []LogEntry
+	ArticleCount   int
+	NewCount       int
+	DuplicateCount int
+	GenerationUUID string
+	WebhookPayload *WebhookPayload
+	Err            error
+
+	// Connection status
+	Connected bool
+
+	// Feed selection
+	AvailableFeeds []rss.FeedConfig
+
+	// Exit code for the application
+	ExitCode int
 }
 
 // NewModel creates a new TUI model
-func NewModel(webhookPort string, appClient *client.Client) Model {
+func NewModel(orchestratorURL string) Model {
+	// Convert map to slice for display
+	var feeds []rss.FeedConfig
+	for _, config := range rss.FeedPresets {
+		feeds = append(feeds, config)
+	}
+	// Sort by name
+	sort.Slice(feeds, func(i, j int) bool {
+		return feeds[i].Name < feeds[j].Name
+	})
+
 	return Model{
-		State:       StateIdle,
-		AppClient:   appClient,
-		WebhookPort: webhookPort,
-		Logs:        make([]string, 0, 10),
+		OrchestratorClient: NewOrchestratorClient(orchestratorURL),
+		State:              StateIdle,
+		Logs:               make([]LogEntry, 0),
+		Connected:          false,
+		AvailableFeeds:     feeds,
 	}
 }
 
 // Init implements tea.Model interface
 func (m Model) Init() tea.Cmd {
-	return nil
-}
-
-// AddLog adds a log entry and returns a new model (value semantics!)
-func (m Model) AddLog(logMsg string) Model {
-	logEntry := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), logMsg)
-	newLogs := append([]string{}, m.Logs...)
-	newLogs = append(newLogs, logEntry)
-	if len(newLogs) > 10 {
-		newLogs = newLogs[len(newLogs)-10:]
-	}
-	m.Logs = newLogs
-	return m
+	// Start polling immediately
+	return tea.Batch(
+		pollStatus(m.OrchestratorClient),
+		tickCmd(),
+	)
 }
 
 // getStateText returns the appropriate state message
 func (m Model) getStateText() string {
+	if !m.Connected {
+		return ErrorStyle.Render("❌ Not connected to orchestrator")
+	}
+
 	switch m.State {
 	case StateIdle:
 		return HighlightStyle.Render("👋 Ready to start!") + "\n\n" +
-			InfoStyle.Render("Press 'd' to begin the demo")
+			InfoStyle.Render(TextStartInstruction)
 	case StateClearing:
 		return StatusStyle.Render("🧹 Clearing ChromaDB cache...")
 	case StateFetching:
@@ -84,23 +111,14 @@ func (m Model) getStateText() string {
 	case StateComplete:
 		return HighlightStyle.Render("✅ COMPLETE")
 	case StateError:
-		return ErrorStyle.Render(fmt.Sprintf("❌ Error: %v", m.Err))
+		errMsg := "Unknown error"
+		if m.Err != nil {
+			errMsg = m.Err.Error()
+		}
+		return ErrorStyle.Render(fmt.Sprintf("❌ Error: %v", errMsg))
 	default:
 		return ""
 	}
-}
-
-// countDedupResults counts new and duplicate articles
-func (m Model) countDedupResults() (newCount, dupCount int) {
-	for _, r := range m.DedupResults {
-		switch r.Status {
-		case "new":
-			newCount++
-		case "duplicate":
-			dupCount++
-		}
-	}
-	return
 }
 
 // formatWebhookResult formats the webhook payload for display

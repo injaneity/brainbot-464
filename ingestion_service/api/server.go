@@ -8,10 +8,12 @@ import (
 func NewRouter() *gin.Engine {
 	r := gin.New()
 	// Minimal middleware: recovery; logger optional to reduce verbosity
+	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
 	// Register resource routers
 	RegisterDeduplicationRoutes(r)
 	RegisterHealthRoutes(r)
+	RegisterRSSRoutes(r)
 	return r
 }

@@ -20,15 +20,7 @@ func main() {
 	}
 
 	r := api.NewRouter()
-	log.Printf("Starting API server on %s", addr)
-	log.Println("API endpoints available:")
-	log.Println("  GET  /api/health")
-	log.Println("  POST /api/deduplication/check")
-	log.Println("  POST /api/deduplication/add")
-	log.Println("  POST /api/deduplication/process")
-	log.Println("  GET  /api/deduplication/count")
-	log.Println("  DELETE /api/deduplication/clear")
-	
+
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

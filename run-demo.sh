@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrainBot Demo Runner
+# BrainBot Demo Runner (Refactored for Client-Server Architecture)
 # Usage: ./run-demo.sh
 
 set -e
@@ -12,10 +12,11 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║      🤖 BrainBot Demo Runner          ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}┃      🤖 BrainBot Demo Runner          ┃${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
+
 # Check for Docker
 if ! command -v docker &> /dev/null || ! command -v docker compose &> /dev/null; then
     echo -e "${RED}Docker or Docker Compose not found!${NC}"
@@ -36,7 +37,8 @@ cleanup() {
     echo -e "${GREEN}Cleanup complete${NC}"
 }
 
-trap cleanup EXIT INT TERM
+# Only cleanup on INT/TERM, not on normal exit (to support detach)
+trap cleanup INT TERM
 
 # Check credentials
 CREATION_ENV_FILE="creation_service/.secrets/youtube.env"
@@ -67,36 +69,55 @@ set -a
 source "$CREATION_ENV_FILE"
 set +a
 
-echo -e "${BLUE}Building and starting services...${NC}"
-docker compose up -d --build
-SERVICES_STARTED=true
+# Check if orchestrator is already running
+ORCHESTRATOR_RUNNING=$(docker ps -q -f name=brainbot-orchestrator 2>/dev/null)
+
+if [ -n "$ORCHESTRATOR_RUNNING" ]; then
+    echo -e "${GREEN}✓ Orchestrator already running${NC}"
+else
+    echo -e "${BLUE}Building and starting services...${NC}"
+    docker compose up -d --build
+    SERVICES_STARTED=true
+    echo ""
+
+    wait_for_service() {
+        local url=$1 name=$2 max=60 attempt=0
+        echo -e "${YELLOW}Waiting for $name...${NC}"
+        while [ $attempt -lt $max ]; do
+            curl -s "$url" >/dev/null 2>&1 && { echo -e "${GREEN}✓ $name ready${NC}"; return 0; }
+            ((attempt++)); sleep 2
+        done
+        echo -e "${RED}✗ $name timeout${NC}"; return 1
+    }
+
+    wait_for_service "http://localhost:8090" "Kafka UI" || exit 1
+    wait_for_service "http://localhost:8000/api/v2/heartbeat" "ChromaDB" || exit 1
+    wait_for_service "http://localhost:8002/health" "Generation" || true
+    wait_for_service "http://localhost:8080/api/health" "API" || exit 1
+    wait_for_service "http://localhost:8081/health" "Orchestrator" || exit 1
+fi
+
+# Run the TUI client
+export ORCHESTRATOR_URL=http://localhost:8081
+
+echo -e "${BLUE}Building TUI client...${NC}"
+go build -o bin/demo-client demo/main.go
+
+echo -e "${GREEN}Starting TUI client...${NC}"
 echo ""
 
-wait_for_service() {
-    local url=$1 name=$2 max=60 attempt=0
-    echo -e "${YELLOW}Waiting for $name...${NC}"
-    while [ $attempt -lt $max ]; do
-        curl -s "$url" >/dev/null 2>&1 && { echo -e "${GREEN}✓ $name ready${NC}"; return 0; }
-        ((attempt++)); sleep 2
-    done
-    echo -e "${RED}✗ $name timeout${NC}"; return 1
-}
+EXIT_CODE=0
+./bin/demo-client --url="$ORCHESTRATOR_URL" || EXIT_CODE=$?
 
-wait_for_service "http://localhost:8090" "Kafka UI" || exit 1
-wait_for_service "http://localhost:8000/api/v2/heartbeat" "ChromaDB" || exit 1
-wait_for_service "http://localhost:8002/health" "Generation" || true
-wait_for_service "http://localhost:8080/api/health" "API" || exit 1
+if [ $EXIT_CODE -eq 10 ]; then
+    echo -e "${YELLOW}Shutdown requested...${NC}"
+    docker compose down
+    echo -e "${GREEN}Services stopped${NC}"
+    exit 0
+fi
 
-# Common: Run the demo
-export API_URL=http://localhost:8080
-export WEBHOOK_PORT=9999
-export GENERATION_SERVICE_URL=http://localhost:8002
-
-echo -e "${GREEN}Starting demo client...${NC}"
-echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
-echo -e "${YELLOW}Press 'q' or Ctrl+C to quit${NC}"
+# After TUI exits, services remain running (no automatic cleanup)
 echo ""
-
-go run demo/main.go
-
-# Cleanup will be called automatically by the trap
+echo -e "${GREEN}TUI client exited${NC}"
+echo -e "${YELLOW}Orchestrator is still running in the background${NC}"
+echo -e "${YELLOW}Run this script again to reconnect, or use 'docker compose down' to stop all services${NC}"

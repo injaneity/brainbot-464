@@ -51,3 +51,5 @@ venv/
 # Log files
 *.log
 *.pid
+
+/bin

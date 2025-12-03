@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
@@ -12,18 +11,8 @@ import (
 
 	"brainbot/creation_service/app"
 	"brainbot/creation_service/app/services"
-
-	"github.com/IBM/sarama"
+	sharedKafka "brainbot/shared/kafka"
 )
-
-// Consumer handles Kafka message consumption
-type Consumer struct {
-	consumer  sarama.ConsumerGroup
-	processor *services.VideoProcessor
-	topic     string
-	groupID   string
-	ready     chan bool
-}
 
 // ConsumerConfig holds Kafka consumer configuration
 type ConsumerConfig struct {
@@ -33,140 +22,45 @@ type ConsumerConfig struct {
 	Processor *services.VideoProcessor
 }
 
-// NewConsumer creates a new Kafka consumer
-func NewConsumer(config ConsumerConfig) (*Consumer, error) {
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Version = sarama.V3_6_0_0
-	saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
-	saramaConfig.Consumer.Return.Errors = true
-
-	client, err := sarama.NewConsumerGroup(config.Brokers, config.GroupID, saramaConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	consumer := &Consumer{
-		consumer:  client,
-		processor: config.Processor,
-		topic:     config.Topic,
-		groupID:   config.GroupID,
-		ready:     make(chan bool),
-	}
-
-	return consumer, nil
-}
-
-// Start begins consuming messages from Kafka
-func (c *Consumer) Start(ctx context.Context) error {
-	handler := &consumerGroupHandler{
-		consumer:  c,
-		processor: c.processor,
-		ready:     c.ready,
-	}
-
-	go func() {
-		for {
-			if err := c.consumer.Consume(ctx, []string{c.topic}, handler); err != nil {
-				if err == context.Canceled {
-					log.Println("Kafka consumer context canceled")
-					return
-				}
-				log.Printf("Error from Kafka consumer: %v", err)
+// NewConsumer creates a new Kafka consumer using the shared consumer implementation
+func NewConsumer(config ConsumerConfig) (*sharedKafka.Consumer, error) {
+	handler := &sharedKafka.TypedMessageHandler[app.VideoInput]{
+		Validate: func(msg *app.VideoInput) bool {
+			// Validate status
+			if msg.Status != "success" {
+				log.Printf("⚠️  Skipping message with status: %s", msg.Status)
+				return false
 			}
 
-			if ctx.Err() != nil {
-				return
-			}
-			handler.ready = make(chan bool)
-		}
-	}()
-
-	<-c.ready
-	log.Printf("✅ Kafka consumer started (group: %s, topic: %s)", c.groupID, c.topic)
-
-	// Handle errors
-	go func() {
-		for err := range c.consumer.Errors() {
-			log.Printf("❌ Kafka consumer error: %v", err)
-		}
-	}()
-
-	return nil
-}
-
-// Close gracefully shuts down the consumer
-func (c *Consumer) Close() error {
-	log.Println("Closing Kafka consumer...")
-	return c.consumer.Close()
-}
-
-// consumerGroupHandler implements sarama.ConsumerGroupHandler
-type consumerGroupHandler struct {
-	consumer  *Consumer
-	processor *services.VideoProcessor
-	ready     chan bool
-}
-
-func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
-	close(h.ready)
-	return nil
-}
-
-func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for {
-		select {
-		case message := <-claim.Messages():
-			if message == nil {
-				return nil
-			}
-
-			log.Printf("📥 Received Kafka message: partition=%d, offset=%d, key=%s",
-				message.Partition, message.Offset, string(message.Key))
-
-			// Parse message
-			var videoInput app.VideoInput
-			if err := json.Unmarshal(message.Value, &videoInput); err != nil {
-				log.Printf("❌ Failed to unmarshal message: %v", err)
-				session.MarkMessage(message, "")
-				continue
-			}
-
-			// Validate
-			if videoInput.Status != "success" {
-				log.Printf("⚠️  Skipping message with status: %s", videoInput.Status)
-				session.MarkMessage(message, "")
-				continue
-			}
-
-			if videoInput.UUID == "" {
+			// Validate UUID
+			if msg.UUID == "" {
 				log.Printf("❌ Message missing UUID, skipping")
-				session.MarkMessage(message, "")
-				continue
+				return false
 			}
 
-			log.Printf("🎬 Processing video: UUID=%s", videoInput.UUID)
+			return true
+		},
+		Process: func(ctx context.Context, msg *app.VideoInput) error {
+			log.Printf("🎬 Processing video: UUID=%s", msg.UUID)
 
 			// Process video
-			if err := h.processor.ProcessVideoInput(videoInput, false); err != nil {
-				log.Printf("❌ Failed to process video %s: %v", videoInput.UUID, err)
-				// Don't mark message - will retry
-				continue
+			if err := config.Processor.ProcessVideoInput(*msg, false); err != nil {
+				log.Printf("❌ Failed to process video %s: %v", msg.UUID, err)
+				return err // Return error to prevent marking (allow retry)
 			}
 
-			log.Printf("✅ Successfully processed video: UUID=%s", videoInput.UUID)
-
-			// Mark message as processed
-			session.MarkMessage(message, "")
-
-		case <-session.Context().Done():
+			log.Printf("✅ Successfully processed video: UUID=%s", msg.UUID)
 			return nil
-		}
+		},
+		AlwaysMark: true, // Mark validation failures, but not processing failures
 	}
+
+	return sharedKafka.NewConsumer(sharedKafka.ConsumerConfig{
+		Brokers: config.Brokers,
+		Topic:   config.Topic,
+		GroupID: config.GroupID,
+		Handler: handler,
+	})
 }
 
 // StartConsumerWithGracefulShutdown starts the Kafka consumer with graceful shutdown handling

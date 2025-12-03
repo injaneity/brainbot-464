@@ -572,7 +572,7 @@ func (c *Chroma) CheckSimilarity(content string, threshold float32, maxResults i
 // ClearCollection deletes all documents from the collection
 func (c *Chroma) ClearCollection() error {
 	// Get all document IDs
-	results, err := c.ListDocuments(0, 10000) // Get up to 10k documents
+	results, err := c.ListDocuments(10000, 0) // Get up to 10k documents
 	if err != nil {
 		return fmt.Errorf("failed to list documents: %w", err)
 	}

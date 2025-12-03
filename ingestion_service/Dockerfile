@@ -4,11 +4,11 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 # Copy go mod files from project root
-COPY ../go.mod ../go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy entire project (needed for imports)
-COPY .. .
+COPY . .
 
 # Build the ingestion server from ingestion_service directory
 WORKDIR /app/ingestion_service
