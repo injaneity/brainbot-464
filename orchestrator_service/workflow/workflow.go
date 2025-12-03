@@ -52,7 +52,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	// Step 5: Wait for webhook (async - webhook handler will update state)
-	r.stateManager.AddLog("Workflow initiated successfully, waiting for generation service callback")
+	r.stateManager.AddLog("Workflow initiated successfully, waiting for generation service callback via Kafka")
 	return nil
 }
 
@@ -82,7 +82,7 @@ func (r *Runner) RunRefresh(ctx context.Context) error {
 	}
 
 	// Step 5: Wait for webhook (async - webhook handler will update state)
-	r.stateManager.AddLog("Refresh workflow initiated successfully, waiting for generation service callback")
+	r.stateManager.AddLog("Refresh workflow initiated successfully, waiting for generation service callback via Kafka")
 	return nil
 }
 

@@ -11,7 +11,6 @@ require (
 	github.com/cohere-ai/cohere-go/v2 v2.15.3
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
-	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mmcdole/gofeed v1.3.0
 )
@@ -22,6 +21,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
@@ -31,7 +31,6 @@ require (
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 )
 
 require (

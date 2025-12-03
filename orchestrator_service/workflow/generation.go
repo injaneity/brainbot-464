@@ -19,7 +19,6 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	r.stateManager.AddLog("Sending to generation service...")
 
 	results := r.stateManager.GetDedupResults()
-	webhookPort := r.stateManager.GetWebhookPort()
 
 	// Collect article texts
 	var articleTexts []string
@@ -39,14 +38,9 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 
 	reqUUID := uuid.New().String()
 
-	// IMPORTANT: Use Docker internal DNS for webhook callback
-	// When running in Docker, "orchestrator" is the service name
-	webhookURL := fmt.Sprintf("http://orchestrator:%s/webhook", webhookPort)
-
 	requestBody := map[string]interface{}{
-		"uuid":        reqUUID,
-		"articles":    articleTexts,
-		"webhook_url": webhookURL,
+		"uuid":     reqUUID,
+		"articles": articleTexts,
 	}
 
 	jsonData, err := json.Marshal(requestBody)

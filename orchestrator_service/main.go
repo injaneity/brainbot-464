@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"orchestrator/api"
 	"orchestrator/client"
+	"orchestrator/kafka"
 	"orchestrator/state"
 	"orchestrator/workflow"
 	"os"
@@ -45,6 +46,33 @@ func main() {
 	// Create workflow runner
 	workflowRunner := workflow.NewRunner(stateManager)
 
+	// Kafka configuration
+	kafkaBrokers := []string{"kafka:9092"} // Default
+	if envBrokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS"); envBrokers != "" {
+		kafkaBrokers = []string{envBrokers}
+	}
+	kafkaTopic := "video-processing-requests"
+	kafkaGroupID := "orchestrator-consumer-group"
+
+	// Create Kafka consumer
+	consumerConfig := kafka.ConsumerConfig{
+		Brokers:      kafkaBrokers,
+		Topic:        kafkaTopic,
+		GroupID:      kafkaGroupID,
+		StateManager: stateManager,
+	}
+
+	kafkaConsumer, err := kafka.NewConsumer(consumerConfig)
+	if err != nil {
+		fmt.Printf("Failed to create Kafka consumer: %v\n", err)
+	} else {
+		// Start consumer
+		ctx := context.Background()
+		if err := kafkaConsumer.Start(ctx); err != nil {
+			fmt.Printf("Failed to start Kafka consumer: %v\n", err)
+		}
+	}
+
 	// Create and start API server
 	apiServer := api.NewServer(stateManager, workflowRunner, *port)
 
@@ -78,6 +106,12 @@ func main() {
 	if err := apiServer.Shutdown(ctx); err != nil {
 		fmt.Printf("Shutdown error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if kafkaConsumer != nil {
+		if err := kafkaConsumer.Close(); err != nil {
+			fmt.Printf("Kafka consumer close error: %v\n", err)
+		}
 	}
 
 	fmt.Println("Server stopped")
