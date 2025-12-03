@@ -13,6 +13,8 @@ type VideoInput struct {
 	ResourceTimestamps map[string]any      `json:"resource_timestamps"`
 	Status             string              `json:"status"`
 	Error              *string             `json:"error"`
+	Title              string              `json:"title,omitempty"`
+	SourceURL          string              `json:"source_url,omitempty"`
 }
 
 type VideoMetadata struct {

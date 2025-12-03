@@ -18,15 +18,22 @@ import (
 type VideoProcessor struct {
 	uploader    *Uploader
 	backgrounds []string
+	skipUpload  bool
 }
 
 // NewVideoProcessor initializes a new video processor
 func NewVideoProcessor(backgroundsDir string) (*VideoProcessor, error) {
+	// Try to initialize uploader, but allow it to fail for testing
 	uploader, err := NewUploader()
+	skipUpload := false
+	
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize YouTube uploader: %w", err)
+		log.Printf("⚠️  YouTube uploader not initialized (missing credentials): %v", err)
+		log.Println("📹 Running in VIDEO-ONLY mode (no upload)")
+		skipUpload = true
+	} else {
+		log.Println("✅ YouTube client initialized")
 	}
-	log.Println("✅ YouTube client initialized")
 
 	backgrounds, err := getBackgroundVideos(backgroundsDir)
 	if err != nil {
@@ -37,27 +44,37 @@ func NewVideoProcessor(backgroundsDir string) (*VideoProcessor, error) {
 	return &VideoProcessor{
 		uploader:    uploader,
 		backgrounds: backgrounds,
+		skipUpload:  skipUpload,
 	}, nil
 }
 
 // ProcessFromDirectory processes all JSON files in the specified directory
 func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
+	// Find both .json and .txt files
 	jsonFiles, err := filepath.Glob(filepath.Join(inputDir, "*.json"))
 	if err != nil {
-		return fmt.Errorf("failed to read input directory: %w", err)
+		return fmt.Errorf("failed to read JSON files: %w", err)
 	}
-
-	if len(jsonFiles) == 0 {
-		log.Println("⚠️  No JSON files found in input/ directory")
+	
+	txtFiles, err := filepath.Glob(filepath.Join(inputDir, "*.txt"))
+	if err != nil {
+		return fmt.Errorf("failed to read txt files: %w", err)
+	}
+	
+	// Combine both file lists
+	allFiles := append(jsonFiles, txtFiles...)
+	
+	if len(allFiles) == 0 {
+		log.Println("⚠️  No JSON or TXT files found in input/ directory")
 		return nil
 	}
 
-	log.Printf("📄 Found %d videos to process", len(jsonFiles))
+	log.Printf("📄 Found %d videos to process", len(allFiles))
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, config.MaxConcurrentVideos)
 
-	for i, jsonFile := range jsonFiles {
+	for i, jsonFile := range allFiles {
 		wg.Add(1)
 
 		go func(idx int, file string) {
@@ -66,7 +83,7 @@ func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			if err := p.ProcessSingleVideo(file, idx+1, len(jsonFiles)); err != nil {
+			if err := p.ProcessSingleVideo(file, idx+1, len(allFiles)); err != nil {
 				log.Printf("❌ Failed to process %s: %v", file, err)
 			}
 
@@ -114,8 +131,26 @@ func (p *VideoProcessor) ProcessVideoInput(input app.VideoInput, cleanup bool) e
 	}
 	log.Printf("  ✅ Video created: %s", outputPath)
 
-	articleTitle := generateTitleFromSubtitles(input.SubtitleTimestamps)
-	metadata := GenerateMetadata(input, articleTitle, "https://example.com/article")
+	// Skip upload if credentials not configured
+	if p.skipUpload {
+		log.Printf("  ⏭️  Skipping YouTube upload (no credentials)")
+		log.Printf("  🎉 SUCCESS! Video saved: %s", outputPath)
+		return nil
+	}
+
+	// Use title from input, or generate from subtitles as fallback
+	articleTitle := input.Title
+	if articleTitle == "" {
+		articleTitle = generateTitleFromSubtitles(input.SubtitleTimestamps)
+	}
+
+	// Use source URL from input, or use default if not provided
+	sourceURL := input.SourceURL
+	if sourceURL == "" {
+		sourceURL = "https://example.com/article"
+	}
+
+	metadata := GenerateMetadata(input, articleTitle, sourceURL)
 
 	log.Printf("  📤 Uploading to YouTube...")
 	videoID, err := p.uploader.UploadVideo(outputPath, metadata)
