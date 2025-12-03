@@ -12,8 +12,9 @@ type ArticleResult struct {
 
 // DeduplicationResult contains the result of deduplication check
 type DeduplicationResult struct {
-	IsDuplicate     bool      `json:"is_duplicate"`
-	MatchingID      string    `json:"matching_id,omitempty"`
-	SimilarityScore float32   `json:"similarity_score,omitempty"`
-	CheckedAt       time.Time `json:"checked_at"`
+	IsDuplicate      bool      `json:"is_duplicate"`
+	IsExactDuplicate bool      `json:"is_exact_duplicate,omitempty"`
+	MatchingID       string    `json:"matching_id,omitempty"`
+	SimilarityScore  float32   `json:"similarity_score,omitempty"`
+	CheckedAt        time.Time `json:"checked_at"`
 }

@@ -2,7 +2,10 @@ package api
 
 import (
 	"brainbot/ingestion_service/deduplication"
+	"brainbot/ingestion_service/storage"
 	"brainbot/ingestion_service/types"
+	"context"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -48,6 +51,7 @@ type ProcessArticleRequest struct {
 type ProcessArticleResponse struct {
 	Status              string                             `json:"status"` // "new", "duplicate", "error"
 	DeduplicationResult *deduplication.DeduplicationResult `json:"deduplication_result,omitempty"`
+	PresignedURL        string                             `json:"presigned_url,omitempty"`
 	Error               string                             `json:"error,omitempty"`
 }
 
@@ -124,7 +128,16 @@ func handleProcessArticle(c *gin.Context) {
 	}
 	defer deduplicator.Close()
 
-	result, err := deduplicator.ProcessArticle(req.Article)
+	s3Client, err := initializeS3(c.Request.Context())
+	if err != nil {
+		log.Printf("Warning: Failed to initialize S3: %v", err)
+		// Proceeding without S3 might be critical failure depending on requirements.
+		// User said "we create a new s3 object", so it seems required.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize S3: " + err.Error()})
+		return
+	}
+
+	result, err := deduplicator.ProcessArticle(c.Request.Context(), req.Article)
 	if err != nil {
 		response := ProcessArticleResponse{
 			Status: "error",
@@ -135,13 +148,51 @@ func handleProcessArticle(c *gin.Context) {
 	}
 
 	status := "new"
-	if result.IsDuplicate {
+	var presignedURL string
+
+	// Determine content to use
+	content := req.Article.FullContentText
+	if content == "" {
+		content = req.Article.FullContent
+	}
+	if content == "" {
+		content = req.Article.Summary
+	}
+
+	if result.IsExactDuplicate {
 		status = "duplicate"
+		// Exact duplicate: Do nothing with S3
+	} else if result.IsDuplicate {
+		status = "duplicate"
+		// Similar duplicate: Append to existing S3 object
+		if result.MatchingID != "" {
+			err := s3Client.AppendToArticleObject(c.Request.Context(), result.MatchingID, content)
+			if err != nil {
+				log.Printf("Error appending to S3 for article %s (match %s): %v", req.Article.ID, result.MatchingID, err)
+				// We don't fail the request, but log the error
+			}
+		}
+	} else {
+		// New article
+		status = "new"
+		// Create new S3 object
+		err := s3Client.CreateArticleObject(c.Request.Context(), req.Article.ID, req.Article.Title, content)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create S3 object: " + err.Error()})
+			return
+		}
+
+		// Generate Pre-signed URL
+		presignedURL, err = s3Client.GeneratePresignedURL(c.Request.Context(), req.Article.ID, 15*time.Minute)
+		if err != nil {
+			log.Printf("Error generating presigned URL for article %s: %v", req.Article.ID, err)
+		}
 	}
 
 	response := ProcessArticleResponse{
 		Status:              status,
 		DeduplicationResult: result,
+		PresignedURL:        presignedURL,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -210,13 +261,31 @@ func initializeDeduplicator() (*deduplication.Deduplicator, error) {
 		EmbeddingModel: "",
 	}
 
+	redisConfig := deduplication.RedisConfig{
+		Addr:     getEnvOrDefault("REDIS_ADDR", "localhost:6379"),
+		Password: getEnvOrDefault("REDIS_PASSWORD", ""),
+		DB:       getEnvPortOrDefault("REDIS_DB", 0),
+	}
+
 	deduplicatorConfig := deduplication.DeduplicatorConfig{
 		ChromaConfig:        chromaConfig,
+		RedisConfig:         redisConfig,
 		SimilarityThreshold: 0, // Use default
 		MaxSearchResults:    0, // Use default
 	}
 
 	return deduplication.NewDeduplicator(deduplicatorConfig)
+}
+
+func initializeS3(ctx context.Context) (*storage.S3Client, error) {
+	bucket := getEnvOrDefault("S3_BUCKET", "")
+	if bucket == "" {
+		return nil, os.ErrNotExist // Or custom error "S3_BUCKET not set"
+	}
+	prefix := getEnvOrDefault("S3_PREFIX", "")
+	region := getEnvOrDefault("S3_REGION", "us-east-1")
+
+	return storage.NewS3Client(ctx, bucket, prefix, region)
 }
 
 func getEnvOrDefault(key, defaultVal string) string {
