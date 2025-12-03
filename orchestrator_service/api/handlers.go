@@ -21,12 +21,21 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// StartRequest represents the request body for start/refresh
+type StartRequest struct {
+	FeedPreset string `json:"feed_preset"`
+}
+
 // handleStart handles POST /api/start
 func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	var req StartRequest
+	// Decode optional body
+	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	// Check if already running
 	currentState := s.stateManager.GetState()
@@ -38,7 +47,7 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	// Start workflow asynchronously
 	go func() {
 		ctx := context.Background()
-		if err := s.workflowRunner.Run(ctx); err != nil {
+		if err := s.workflowRunner.Run(ctx, req.FeedPreset); err != nil {
 			log.Printf("Workflow error: %v", err)
 		}
 	}()
@@ -57,6 +66,10 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var req StartRequest
+	// Decode optional body
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
 	// Check if already running
 	currentState := s.stateManager.GetState()
 	if currentState != types.StateIdle && currentState != types.StateComplete && currentState != types.StateError {
@@ -67,7 +80,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	// Start workflow asynchronously
 	go func() {
 		ctx := context.Background()
-		if err := s.workflowRunner.RunRefresh(ctx); err != nil {
+		if err := s.workflowRunner.RunRefresh(ctx, req.FeedPreset); err != nil {
 			log.Printf("Workflow error: %v", err)
 		}
 	}()

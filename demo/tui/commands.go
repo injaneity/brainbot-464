@@ -18,17 +18,17 @@ func pollStatus(client *OrchestratorClient) tea.Cmd {
 }
 
 // triggerResetAndFetch creates a command to start the workflow (reset)
-func triggerResetAndFetch(client *OrchestratorClient) tea.Cmd {
+func triggerResetAndFetch(client *OrchestratorClient, feedPreset string) tea.Cmd {
 	return func() tea.Msg {
-		err := client.ResetAndFetch()
+		err := client.ResetAndFetch(feedPreset)
 		return StartWorkflowMsg{Err: err}
 	}
 }
 
 // triggerFetchNew creates a command to start the refresh workflow (fetch new)
-func triggerFetchNew(client *OrchestratorClient) tea.Cmd {
+func triggerFetchNew(client *OrchestratorClient, feedPreset string) tea.Cmd {
 	return func() tea.Msg {
-		err := client.FetchNew()
+		err := client.FetchNew(feedPreset)
 		return StartWorkflowMsg{Err: err}
 	}
 }

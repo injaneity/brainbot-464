@@ -44,13 +44,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d", "D":
 		// Fetch new articles (incremental)
 		if m.Connected && (m.State == StateIdle || m.State == StateComplete || m.State == StateError) {
-			return m, triggerFetchNew(m.OrchestratorClient)
+			return m, triggerFetchNew(m.OrchestratorClient, "")
 		}
 
 	case "r", "R":
 		// Reset and fetch (clears cache)
 		if m.Connected && (m.State == StateIdle || m.State == StateComplete || m.State == StateError) {
-			return m, triggerResetAndFetch(m.OrchestratorClient)
+			return m, triggerResetAndFetch(m.OrchestratorClient, "")
 		}
 	}
 

@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"brainbot/shared/rss"
 	"brainbot/shared/types"
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,17 +51,31 @@ type Model struct {
 	// Connection status
 	Connected bool
 
+	// Feed selection
+	AvailableFeeds []rss.FeedConfig
+
 	// Exit code for the application
 	ExitCode int
 }
 
 // NewModel creates a new TUI model
 func NewModel(orchestratorURL string) Model {
+	// Convert map to slice for display
+	var feeds []rss.FeedConfig
+	for _, config := range rss.FeedPresets {
+		feeds = append(feeds, config)
+	}
+	// Sort by name
+	sort.Slice(feeds, func(i, j int) bool {
+		return feeds[i].Name < feeds[j].Name
+	})
+
 	return Model{
 		OrchestratorClient: NewOrchestratorClient(orchestratorURL),
 		State:              StateIdle,
 		Logs:               make([]LogEntry, 0),
 		Connected:          false,
+		AvailableFeeds:     feeds,
 	}
 }
 

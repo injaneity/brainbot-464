@@ -27,6 +27,16 @@ func (m Model) View() string {
 	}
 	b.WriteString("\n\n")
 
+	// Feed Selection
+	b.WriteString(InfoStyle.Render("📡 Configured Feeds: "))
+	for i, feed := range m.AvailableFeeds {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(HighlightStyle.Render(feed.Name))
+	}
+	b.WriteString("\n\n")
+
 	// Current state
 	b.WriteString(m.getStateText())
 	b.WriteString("\n\n")

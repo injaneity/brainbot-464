@@ -24,7 +24,7 @@ func main() {
 	// Parse command-line flags
 	port := flag.String("port", "8081", "HTTP API port")
 	webhookPort := flag.String("webhook-port", "9999", "Webhook server port")
-	cronSchedule := flag.String("cron", "*/1 * * * *", "Cron schedule for automated runs (default: every 5 minutes)")
+	cronSchedule := flag.String("cron", "*/5 * * * *", "Cron schedule for automated runs (default: every 5 minutes)")
 	apiURL := flag.String("api-url", "", "Ingestion service API URL (overrides API_URL env var)")
 	flag.Parse()
 

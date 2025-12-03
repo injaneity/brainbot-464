@@ -24,7 +24,7 @@ func NewRunner(stateManager *state.Manager) *Runner {
 
 // Run executes the complete workflow
 // This is called either by manual trigger (POST /start) or by cron job
-func (r *Runner) Run(ctx context.Context) error {
+func (r *Runner) Run(ctx context.Context, feedPreset string) error {
 	_ = godotenv.Load()
 
 	// Step 1: Clear cache
@@ -34,7 +34,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	// Step 2: Fetch articles
-	if err := r.fetchArticles(ctx); err != nil {
+	if err := r.fetchArticles(ctx, feedPreset); err != nil {
 		r.stateManager.SetError(fmt.Errorf("fetch articles: %w", err))
 		return err
 	}
@@ -58,13 +58,13 @@ func (r *Runner) Run(ctx context.Context) error {
 
 // RunRefresh executes the workflow without clearing the cache
 // This allows fetching new articles while keeping the history for deduplication
-func (r *Runner) RunRefresh(ctx context.Context) error {
+func (r *Runner) RunRefresh(ctx context.Context, feedPreset string) error {
 	_ = godotenv.Load()
 
 	// Skip Step 1: Clear cache
 
 	// Step 2: Fetch articles
-	if err := r.fetchArticles(ctx); err != nil {
+	if err := r.fetchArticles(ctx, feedPreset); err != nil {
 		r.stateManager.SetError(fmt.Errorf("fetch articles: %w", err))
 		return err
 	}
@@ -102,18 +102,39 @@ func (r *Runner) clearCache(ctx context.Context) error {
 }
 
 // fetchArticles fetches RSS articles
-func (r *Runner) fetchArticles(ctx context.Context) error {
+func (r *Runner) fetchArticles(ctx context.Context, feedPreset string) error {
 	r.stateManager.SetState(types.StateFetching)
-	r.stateManager.AddLog("Fetching RSS feed...")
 
 	client := r.stateManager.GetIngestionClient()
-	articles, err := client.FetchArticles(ctx, "", 0)
-	if err != nil {
-		return err
+	var allArticles []*types.Article
+
+	presetsToFetch := []string{}
+	if feedPreset != "" {
+		presetsToFetch = append(presetsToFetch, feedPreset)
+	} else {
+		// Fetch all
+		r.stateManager.AddLog("Fetching all RSS feeds...")
+		presets, err := client.GetPresets(ctx)
+		if err != nil {
+			return err
+		}
+		for p := range presets {
+			presetsToFetch = append(presetsToFetch, p)
+		}
 	}
 
-	r.stateManager.SetArticles(articles)
-	r.stateManager.AddLog(fmt.Sprintf("Fetched %d articles", len(articles)))
+	for _, p := range presetsToFetch {
+		r.stateManager.AddLog(fmt.Sprintf("Fetching feed: %s...", p))
+		articles, err := client.FetchArticles(ctx, p, 0)
+		if err != nil {
+			r.stateManager.AddLog(fmt.Sprintf("Error fetching %s: %v", p, err))
+			continue
+		}
+		allArticles = append(allArticles, articles...)
+	}
+
+	r.stateManager.SetArticles(allArticles)
+	r.stateManager.AddLog(fmt.Sprintf("Fetched total %d articles", len(allArticles)))
 	return nil
 }
 

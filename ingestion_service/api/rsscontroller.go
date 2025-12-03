@@ -2,6 +2,7 @@ package api
 
 import (
 	"brainbot/ingestion_service/rssfeeds"
+	"brainbot/shared/rss"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,11 @@ type FetchRequest struct {
 
 func RegisterRSSRoutes(r *gin.Engine) {
 	r.POST("/fetch", FetchArticles)
+	r.GET("/presets", GetPresets)
+}
+
+func GetPresets(c *gin.Context) {
+	c.JSON(http.StatusOK, rss.FeedPresets)
 }
 
 func FetchArticles(c *gin.Context) {

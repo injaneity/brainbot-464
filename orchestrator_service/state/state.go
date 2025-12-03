@@ -21,9 +21,9 @@ type Manager struct {
 	generationUUID string
 
 	// Logs (ring buffer)
-	logs     []types.LogEntry
-	maxLogs  int
-	lastErr  error
+	logs    []types.LogEntry
+	maxLogs int
+	lastErr error
 
 	// Webhook
 	webhookPayload *types.WebhookPayload

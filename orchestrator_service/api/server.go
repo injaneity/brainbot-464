@@ -67,20 +67,21 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// StartCron starts the cron job for automated workflow runs
+// StartCron starts the cron jobs for automated workflow runs
 func (s *Server) StartCron(schedule string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Add cron job
 	id, err := s.cron.AddFunc(schedule, func() {
-		log.Println("Cron triggered: starting automated workflow")
+		log.Println("Cron triggered: starting automated workflow for all feeds")
 
 		// Only run if we're in idle or complete state
 		currentState := s.stateManager.GetState()
 		if currentState == types.StateIdle || currentState == types.StateComplete {
 			ctx := context.Background()
-			if err := s.workflowRunner.RunRefresh(ctx); err != nil {
+			// Pass empty string to fetch all feeds
+			if err := s.workflowRunner.RunRefresh(ctx, ""); err != nil {
 				log.Printf("Cron workflow error: %v", err)
 			}
 		} else {

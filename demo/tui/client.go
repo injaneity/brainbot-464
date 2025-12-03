@@ -47,32 +47,34 @@ func (c *OrchestratorClient) GetStatus() (*StatusResponse, error) {
 }
 
 // ResetAndFetch triggers the workflow on the orchestrator (clears cache)
-func (c *OrchestratorClient) ResetAndFetch() error {
-	resp, err := c.client.Post(c.baseURL+"/api/start", "application/json", bytes.NewReader([]byte("{}")))
+func (c *OrchestratorClient) ResetAndFetch(feedPreset string) error {
+	body := fmt.Sprintf(`{"feed_preset": "%s"}`, feedPreset)
+	resp, err := c.client.Post(c.baseURL+"/api/start", "application/json", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return fmt.Errorf("failed to start workflow: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
 }
 
 // FetchNew triggers the refresh workflow on the orchestrator (keeps cache)
-func (c *OrchestratorClient) FetchNew() error {
-	resp, err := c.client.Post(c.baseURL+"/api/refresh", "application/json", bytes.NewReader([]byte("{}")))
+func (c *OrchestratorClient) FetchNew(feedPreset string) error {
+	body := fmt.Sprintf(`{"feed_preset": "%s"}`, feedPreset)
+	resp, err := c.client.Post(c.baseURL+"/api/refresh", "application/json", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return fmt.Errorf("failed to start refresh workflow: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
