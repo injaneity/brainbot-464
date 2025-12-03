@@ -10,6 +10,9 @@ COPY go.mod go.sum ./
 # Copy ingestion_service dependencies (needed for RSS feeds)
 COPY ingestion_service ./ingestion_service
 
+# Copy shared dependencies
+COPY shared ./shared
+
 # Download dependencies
 WORKDIR /app/orchestrator_service
 RUN go mod download

@@ -27,12 +27,7 @@ type VectorClient interface {
 }
 
 // DeduplicationResult contains the result of deduplication check
-type DeduplicationResult struct {
-	IsDuplicate     bool      `json:"is_duplicate"`
-	MatchingID      string    `json:"matching_id,omitempty"`
-	SimilarityScore float32   `json:"similarity_score,omitempty"`
-	CheckedAt       time.Time `json:"checked_at"`
-}
+type DeduplicationResult = types.DeduplicationResult
 
 // Deduplicator handles article deduplication using vector embeddings
 type Deduplicator struct {
