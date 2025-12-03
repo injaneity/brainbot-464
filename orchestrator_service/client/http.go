@@ -12,7 +12,7 @@ import (
 // doJSONRequest performs a JSON request with the given method, path, payload, and result.
 // It handles marshaling the payload, creating the request, executing it, and unmarshaling the response.
 // If result is nil, the response body is not decoded.
-func (c *Client) doJSONRequest(ctx context.Context, method, path string, payload, result interface{}) error {
+func (c *IngestionClient) doJSONRequest(ctx context.Context, method, path string, payload, result interface{}) error {
 	url := fmt.Sprintf("%s%s", c.baseURL, path)
 
 	var body io.Reader

@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"brainbot/demo/client"
-	"brainbot/ingestion_service/types"
 	"fmt"
 	"strings"
 	"time"
@@ -24,49 +22,79 @@ const (
 	StateError         State = "error"
 )
 
-// Model represents the application state
+// LogEntry represents a single log line with timestamp
+type LogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Message   string    `json:"message"`
+}
+
+// WebhookPayload represents the generation service response
+type WebhookPayload struct {
+	UUID               string                   `json:"uuid"`
+	Voiceover          string                   `json:"voiceover"`
+	SubtitleTimestamps []map[string]interface{} `json:"subtitle_timestamps"`
+	ResourceTimestamps map[string]interface{}   `json:"resource_timestamps"`
+	Status             string                   `json:"status"`
+	Error              *string                  `json:"error,omitempty"`
+	Timings            map[string]float64       `json:"timings,omitempty"`
+}
+
+// StatusResponse is the JSON response from orchestrator
+type StatusResponse struct {
+	State          State           `json:"state"`
+	Logs           []LogEntry      `json:"logs"`
+	ArticleCount   int             `json:"article_count"`
+	NewCount       int             `json:"new_count"`
+	DuplicateCount int             `json:"duplicate_count"`
+	GenerationUUID string          `json:"generation_uuid,omitempty"`
+	WebhookPayload *WebhookPayload `json:"webhook_payload,omitempty"`
+	Error          string          `json:"error,omitempty"`
+}
+
+// Model represents the TUI client state (thin client)
 type Model struct {
-	State           State
-	AppClient       *client.Client
-	Articles        []*types.Article
-	DedupResults    []client.ArticleResult
-	GenerationUUID  string
-	WebhookPayload  *WebhookPayload
-	WebhookPort     string
-	WebhookReceived bool
-	Err             error
-	Logs            []string
+	// Orchestrator client
+	OrchestratorClient *OrchestratorClient
+
+	// Local UI state (synced from orchestrator)
+	State          State
+	Logs           []LogEntry
+	ArticleCount   int
+	NewCount       int
+	DuplicateCount int
+	GenerationUUID string
+	WebhookPayload *WebhookPayload
+	Err            error
+
+	// Connection status
+	Connected bool
 }
 
 // NewModel creates a new TUI model
-func NewModel(webhookPort string, appClient *client.Client) Model {
+func NewModel(orchestratorURL string) Model {
 	return Model{
-		State:       StateIdle,
-		AppClient:   appClient,
-		WebhookPort: webhookPort,
-		Logs:        make([]string, 0, 10),
+		OrchestratorClient: NewOrchestratorClient(orchestratorURL),
+		State:              StateIdle,
+		Logs:               make([]LogEntry, 0),
+		Connected:          false,
 	}
 }
 
 // Init implements tea.Model interface
 func (m Model) Init() tea.Cmd {
-	return nil
-}
-
-// AddLog adds a log entry and returns a new model (value semantics!)
-func (m Model) AddLog(logMsg string) Model {
-	logEntry := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), logMsg)
-	newLogs := append([]string{}, m.Logs...)
-	newLogs = append(newLogs, logEntry)
-	if len(newLogs) > 10 {
-		newLogs = newLogs[len(newLogs)-10:]
-	}
-	m.Logs = newLogs
-	return m
+	// Start polling immediately
+	return tea.Batch(
+		pollStatus(m.OrchestratorClient),
+		tickCmd(),
+	)
 }
 
 // getStateText returns the appropriate state message
 func (m Model) getStateText() string {
+	if !m.Connected {
+		return ErrorStyle.Render("❌ Not connected to orchestrator")
+	}
+
 	switch m.State {
 	case StateIdle:
 		return HighlightStyle.Render("👋 Ready to start!") + "\n\n" +
@@ -84,23 +112,14 @@ func (m Model) getStateText() string {
 	case StateComplete:
 		return HighlightStyle.Render("✅ COMPLETE")
 	case StateError:
-		return ErrorStyle.Render(fmt.Sprintf("❌ Error: %v", m.Err))
+		errMsg := "Unknown error"
+		if m.Err != nil {
+			errMsg = m.Err.Error()
+		}
+		return ErrorStyle.Render(fmt.Sprintf("❌ Error: %v", errMsg))
 	default:
 		return ""
 	}
-}
-
-// countDedupResults counts new and duplicate articles
-func (m Model) countDedupResults() (newCount, dupCount int) {
-	for _, r := range m.DedupResults {
-		switch r.Status {
-		case "new":
-			newCount++
-		case "duplicate":
-			dupCount++
-		}
-	}
-	return
 }
 
 // formatWebhookResult formats the webhook payload for display

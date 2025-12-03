@@ -1,13 +1,10 @@
-package client
+package types
 
-import (
-	"brainbot/ingestion_service/types"
-	"time"
-)
+import "time"
 
 // ArticleResult represents the processing result for a single article
 type ArticleResult struct {
-	Article             *types.Article       `json:"article"`
+	Article             *Article             `json:"article"`
 	Status              string               `json:"status"` // "new", "duplicate", "failed", "error"
 	DeduplicationResult *DeduplicationResult `json:"deduplication_result,omitempty"`
 	Error               string               `json:"error,omitempty"`

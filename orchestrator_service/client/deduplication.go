@@ -1,18 +1,18 @@
 package client
 
 import (
-	"brainbot/ingestion_service/types"
 	"context"
 	"net/http"
+	"orchestrator/types"
 )
 
-// CheckDuplicate checks if an article is a duplicate via the API
-func (c *Client) CheckDuplicate(ctx context.Context, article *types.Article) (*DeduplicationResult, error) {
+// CheckDuplicate checks if an article is a duplicate via the ingestion API
+func (c *IngestionClient) CheckDuplicate(ctx context.Context, article *types.Article) (*types.DeduplicationResult, error) {
 	payload := map[string]interface{}{
 		"article": article,
 	}
 
-	var result DeduplicationResult
+	var result types.DeduplicationResult
 	if err := c.doJSONRequest(ctx, http.MethodPost, "/api/deduplication/check", payload, &result); err != nil {
 		return nil, err
 	}
@@ -20,8 +20,8 @@ func (c *Client) CheckDuplicate(ctx context.Context, article *types.Article) (*D
 	return &result, nil
 }
 
-// AddArticle adds an article to the deduplication database via the API
-func (c *Client) AddArticle(ctx context.Context, article *types.Article) error {
+// AddArticle adds an article to the deduplication database via the ingestion API
+func (c *IngestionClient) AddArticle(ctx context.Context, article *types.Article) error {
 	payload := map[string]interface{}{
 		"article": article,
 	}
@@ -29,23 +29,23 @@ func (c *Client) AddArticle(ctx context.Context, article *types.Article) error {
 	return c.doJSONRequest(ctx, http.MethodPost, "/api/deduplication/add", payload, nil)
 }
 
-// ProcessArticle processes an article (checks for duplicates and adds if new) via the API
-func (c *Client) ProcessArticle(ctx context.Context, article *types.Article) (*ArticleResult, error) {
+// ProcessArticle processes an article (checks for duplicates and adds if new) via the ingestion API
+func (c *IngestionClient) ProcessArticle(ctx context.Context, article *types.Article) (*types.ArticleResult, error) {
 	payload := map[string]interface{}{
 		"article": article,
 	}
 
 	var result struct {
-		Status              string               `json:"status"`
-		DeduplicationResult *DeduplicationResult `json:"deduplication_result,omitempty"`
-		Error               string               `json:"error,omitempty"`
+		Status              string                      `json:"status"`
+		DeduplicationResult *types.DeduplicationResult `json:"deduplication_result,omitempty"`
+		Error               string                      `json:"error,omitempty"`
 	}
 
 	if err := c.doJSONRequest(ctx, http.MethodPost, "/api/deduplication/process", payload, &result); err != nil {
 		return nil, err
 	}
 
-	return &ArticleResult{
+	return &types.ArticleResult{
 		Article:             article,
 		Status:              result.Status,
 		DeduplicationResult: result.DeduplicationResult,
@@ -54,13 +54,13 @@ func (c *Client) ProcessArticle(ctx context.Context, article *types.Article) (*A
 }
 
 // ProcessArticles processes multiple articles
-func (c *Client) ProcessArticles(ctx context.Context, articles []*types.Article) ([]ArticleResult, error) {
-	results := make([]ArticleResult, 0, len(articles))
+func (c *IngestionClient) ProcessArticles(ctx context.Context, articles []*types.Article) ([]types.ArticleResult, error) {
+	results := make([]types.ArticleResult, 0, len(articles))
 
 	for _, article := range articles {
 		// Skip articles that failed extraction
 		if article.ExtractionError != "" {
-			results = append(results, ArticleResult{
+			results = append(results, types.ArticleResult{
 				Article: article,
 				Status:  "failed",
 				Error:   article.ExtractionError,
@@ -70,7 +70,7 @@ func (c *Client) ProcessArticles(ctx context.Context, articles []*types.Article)
 
 		result, err := c.ProcessArticle(ctx, article)
 		if err != nil {
-			results = append(results, ArticleResult{
+			results = append(results, types.ArticleResult{
 				Article: article,
 				Status:  "error",
 				Error:   err.Error(),
@@ -84,13 +84,13 @@ func (c *Client) ProcessArticles(ctx context.Context, articles []*types.Article)
 	return results, nil
 }
 
-// ClearCache clears the deduplication cache via the API
-func (c *Client) ClearCache(ctx context.Context) error {
+// ClearCache clears the deduplication cache via the ingestion API
+func (c *IngestionClient) ClearCache(ctx context.Context) error {
 	return c.doJSONRequest(ctx, http.MethodDelete, "/api/deduplication/clear", nil, nil)
 }
 
-// GetCount gets the number of documents in the deduplication database via the API
-func (c *Client) GetCount(ctx context.Context) (int, error) {
+// GetCount gets the number of documents in the deduplication database via the ingestion API
+func (c *IngestionClient) GetCount(ctx context.Context) (int, error) {
 	var result struct {
 		Count int `json:"count"`
 	}

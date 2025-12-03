@@ -6,24 +6,26 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Update implements tea.Model interface
+// Update implements tea.Model interface (polling-based version)
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
-	case CacheClearedMsg:
-		return m.handleCacheCleared(msg)
-	case FetchCompleteMsg:
-		return m.handleFetchComplete(msg)
-	case DeduplicationCompleteMsg:
-		return m.handleDeduplicationComplete(msg)
-	case GenerationRequestSentMsg:
-		return m.handleGenerationRequestSent(msg)
-	case WebhookReceivedMsg:
-		return m.handleWebhookReceived(msg)
-	case ErrorMsg:
-		return m.handleError(msg)
+
+	case StatusUpdateMsg:
+		return m.handleStatusUpdate(msg)
+
+	case StartWorkflowMsg:
+		return m.handleStartWorkflow(msg)
+
+	case TickMsg:
+		// Poll again
+		return m, tea.Batch(
+			pollStatus(m.OrchestratorClient),
+			tickCmd(),
+		)
 	}
+
 	return m, nil
 }
 
@@ -31,88 +33,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
+		// Just quit the TUI - orchestrator keeps running
 		return m, tea.Quit
+
+	case "x", "X":
+		// Shutdown orchestrator and quit
+		if m.Connected {
+			m.OrchestratorClient.Shutdown()
+		}
+		return m, tea.Quit
+
 	case "d", "D":
-		if m.State == StateIdle {
-			m.State = StateClearing
-			m = m.AddLog("Clearing ChromaDB cache...")
-			return m, ClearCacheAndFetch(m.AppClient)
+		// Start workflow (only if idle or complete)
+		if m.Connected && (m.State == StateIdle || m.State == StateComplete || m.State == StateError) {
+			return m, startWorkflow(m.OrchestratorClient)
 		}
 	}
+
 	return m, nil
 }
 
-// handleCacheCleared processes cache clearing completion
-func (m Model) handleCacheCleared(msg CacheClearedMsg) (tea.Model, tea.Cmd) {
+// handleStatusUpdate processes status update from orchestrator
+func (m Model) handleStatusUpdate(msg StatusUpdateMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		m.State = StateError
-		m.Err = fmt.Errorf("failed to clear cache: %w", msg.Err)
+		m.Connected = false
+		m.Err = fmt.Errorf("failed to connect to orchestrator: %w", msg.Err)
 		return m, nil
 	}
-	m.State = StateFetching
-	m = m.AddLog("Cache cleared successfully")
-	return m, FetchArticles(m.AppClient)
-}
 
-// handleFetchComplete processes fetch completion
-func (m Model) handleFetchComplete(msg FetchCompleteMsg) (tea.Model, tea.Cmd) {
-	if msg.Err != nil {
-		m.State = StateError
-		m.Err = msg.Err
-		return m, nil
+	// Successfully connected
+	m.Connected = true
+
+	// Update local state from orchestrator
+	status := msg.Status
+	m.State = status.State
+	m.Logs = status.Logs
+	m.ArticleCount = status.ArticleCount
+	m.NewCount = status.NewCount
+	m.DuplicateCount = status.DuplicateCount
+	m.GenerationUUID = status.GenerationUUID
+	m.WebhookPayload = status.WebhookPayload
+
+	if status.Error != "" {
+		m.Err = fmt.Errorf("%s", status.Error)
+	} else {
+		m.Err = nil
 	}
-	m.Articles = msg.Articles
-	m.State = StateDeduplicating
-	m = m.AddLog(fmt.Sprintf("Fetched %d articles", len(msg.Articles)))
-	return m, DeduplicateArticles(m.AppClient, msg.Articles)
-}
 
-// handleDeduplicationComplete processes deduplication completion
-func (m Model) handleDeduplicationComplete(msg DeduplicationCompleteMsg) (tea.Model, tea.Cmd) {
-	if msg.Err != nil {
-		m.State = StateError
-		m.Err = msg.Err
-		return m, nil
-	}
-	m.DedupResults = msg.Results
-	m.State = StateSending
-
-	newCount := 0
-	for _, r := range msg.Results {
-		if r.Status == "new" {
-			newCount++
-		}
-	}
-	m = m.AddLog(fmt.Sprintf("Found %d new articles", newCount))
-
-	return m, SendGenerationRequest(m.DedupResults, m.WebhookPort)
-}
-
-// handleGenerationRequestSent processes generation request sent
-func (m Model) handleGenerationRequestSent(msg GenerationRequestSentMsg) (tea.Model, tea.Cmd) {
-	if msg.Err != nil {
-		m.State = StateError
-		m.Err = msg.Err
-		return m, nil
-	}
-	m.GenerationUUID = msg.UUID
-	m.State = StateWaiting
-	m = m.AddLog(fmt.Sprintf("Generation request sent with UUID: %s", msg.UUID))
 	return m, nil
 }
 
-// handleWebhookReceived processes webhook reception
-func (m Model) handleWebhookReceived(msg WebhookReceivedMsg) (tea.Model, tea.Cmd) {
-	m.WebhookPayload = &msg.Payload
-	m.WebhookReceived = true
-	m.State = StateComplete
-	m = m.AddLog("Webhook received from generation service!")
-	return m, nil
-}
-
-// handleError processes errors
-func (m Model) handleError(msg ErrorMsg) (tea.Model, tea.Cmd) {
-	m.State = StateError
-	m.Err = msg.Err
+// handleStartWorkflow processes workflow start response
+func (m Model) handleStartWorkflow(msg StartWorkflowMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.Err = fmt.Errorf("failed to start workflow: %w", msg.Err)
+	}
+	// Status will be updated via next poll
 	return m, nil
 }
