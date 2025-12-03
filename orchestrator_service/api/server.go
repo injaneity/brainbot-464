@@ -80,7 +80,7 @@ func (s *Server) StartCron(schedule string) error {
 		currentState := s.stateManager.GetState()
 		if currentState == types.StateIdle || currentState == types.StateComplete {
 			ctx := context.Background()
-			if err := s.workflowRunner.Run(ctx); err != nil {
+			if err := s.workflowRunner.RunRefresh(ctx); err != nil {
 				log.Printf("Cron workflow error: %v", err)
 			}
 		} else {
