@@ -50,6 +50,35 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleRefresh handles POST /api/refresh
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if already running
+	currentState := s.stateManager.GetState()
+	if currentState != types.StateIdle && currentState != types.StateComplete && currentState != types.StateError {
+		http.Error(w, fmt.Sprintf("Workflow already running (state=%s)", currentState), http.StatusConflict)
+		return
+	}
+
+	// Start workflow asynchronously
+	go func() {
+		ctx := context.Background()
+		if err := s.workflowRunner.RunRefresh(ctx); err != nil {
+			log.Printf("Workflow error: %v", err)
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "started",
+		"message": "Refresh workflow initiated",
+	})
+}
+
 // handleWebhook handles POST /webhook
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

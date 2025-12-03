@@ -56,6 +56,36 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
+// RunRefresh executes the workflow without clearing the cache
+// This allows fetching new articles while keeping the history for deduplication
+func (r *Runner) RunRefresh(ctx context.Context) error {
+	_ = godotenv.Load()
+
+	// Skip Step 1: Clear cache
+
+	// Step 2: Fetch articles
+	if err := r.fetchArticles(ctx); err != nil {
+		r.stateManager.SetError(fmt.Errorf("fetch articles: %w", err))
+		return err
+	}
+
+	// Step 3: Deduplicate
+	if err := r.deduplicateArticles(ctx); err != nil {
+		r.stateManager.SetError(fmt.Errorf("deduplicate: %w", err))
+		return err
+	}
+
+	// Step 4: Send to generation service
+	if err := r.sendGenerationRequest(ctx); err != nil {
+		r.stateManager.SetError(fmt.Errorf("send generation: %w", err))
+		return err
+	}
+
+	// Step 5: Wait for webhook (async - webhook handler will update state)
+	r.stateManager.AddLog("Refresh workflow initiated successfully, waiting for generation service callback")
+	return nil
+}
+
 // clearCache clears the ChromaDB cache
 func (r *Runner) clearCache(ctx context.Context) error {
 	r.stateManager.SetState(types.StateClearing)

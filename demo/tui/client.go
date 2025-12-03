@@ -46,11 +46,27 @@ func (c *OrchestratorClient) GetStatus() (*StatusResponse, error) {
 	return &status, nil
 }
 
-// Start triggers the workflow on the orchestrator
-func (c *OrchestratorClient) Start() error {
+// ResetAndFetch triggers the workflow on the orchestrator (clears cache)
+func (c *OrchestratorClient) ResetAndFetch() error {
 	resp, err := c.client.Post(c.baseURL+"/api/start", "application/json", bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("failed to start workflow: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// FetchNew triggers the refresh workflow on the orchestrator (keeps cache)
+func (c *OrchestratorClient) FetchNew() error {
+	resp, err := c.client.Post(c.baseURL+"/api/refresh", "application/json", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return fmt.Errorf("failed to start refresh workflow: %w", err)
 	}
 	defer resp.Body.Close()
 

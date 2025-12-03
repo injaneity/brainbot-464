@@ -3,11 +3,13 @@ package tui
 // UI Text Constants
 const (
 	// Instructions
-	TextStartInstruction    = "Press 'd' to start the demo workflow"
+	TextStartInstruction    = "Press 'd' to fetch new articles (Incremental)"
+	TextResetInstruction    = "Press 'r' to reset database & fetch (Clean Start)"
 	TextDetachInstruction   = "Press 'q' to detach (orchestrator keeps running)"
 	TextShutdownInstruction = "Press 'x' to shutdown orchestrator and quit"
+	TextCronNote            = "Note: Orchestrator runs automatically on a schedule (cron)."
 
 	// Footer
-	TextFooterIdle    = "Press 'd' to start workflow | Press 'q' to detach | Press 'x' to shutdown orchestrator"
-	TextFooterRunning = "Press 'q' to detach (workflow continues) | Press 'x' to shutdown orchestrator"
+	TextFooterIdle    = "d: Fetch New | r: Reset & Fetch | q: Detach | x: Shutdown"
+	TextFooterRunning = "q: Detach (workflow continues) | x: Shutdown Orchestrator"
 )

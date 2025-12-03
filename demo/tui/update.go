@@ -42,9 +42,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "d", "D":
-		// Start workflow (only if idle or complete)
+		// Fetch new articles (incremental)
 		if m.Connected && (m.State == StateIdle || m.State == StateComplete || m.State == StateError) {
-			return m, startWorkflow(m.OrchestratorClient)
+			return m, triggerFetchNew(m.OrchestratorClient)
+		}
+
+	case "r", "R":
+		// Reset and fetch (clears cache)
+		if m.Connected && (m.State == StateIdle || m.State == StateComplete || m.State == StateError) {
+			return m, triggerResetAndFetch(m.OrchestratorClient)
 		}
 	}
 

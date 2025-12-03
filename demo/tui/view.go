@@ -16,6 +16,8 @@ func (m Model) View() string {
 	// Connection status
 	if m.Connected {
 		b.WriteString(InfoStyle.Render("🟢 Connected to orchestrator"))
+		b.WriteString("\n")
+		b.WriteString(InfoStyle.Render(TextCronNote))
 	} else {
 		b.WriteString(ErrorStyle.Render("🔴 Disconnected from orchestrator"))
 		if m.Err != nil {
