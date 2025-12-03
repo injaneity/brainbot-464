@@ -38,7 +38,6 @@ func NewServer(stateManager *state.Manager, workflowRunner *workflow.Runner, por
 	// API endpoints
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/start", s.handleStart)
-	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 
 	// Webhook endpoint (called by generation service)
 	mux.HandleFunc("/webhook", s.handleWebhook)

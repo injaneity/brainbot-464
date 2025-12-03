@@ -48,6 +48,9 @@ type Model struct {
 
 	// Connection status
 	Connected bool
+
+	// Exit code for the application
+	ExitCode int
 }
 
 // NewModel creates a new TUI model

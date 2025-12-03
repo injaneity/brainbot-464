@@ -74,7 +74,6 @@ ORCHESTRATOR_RUNNING=$(docker ps -q -f name=brainbot-orchestrator 2>/dev/null)
 
 if [ -n "$ORCHESTRATOR_RUNNING" ]; then
     echo -e "${GREEN}✓ Orchestrator already running${NC}"
-    echo -e "${YELLOW}Starting TUI client...${NC}"
 else
     echo -e "${BLUE}Building and starting services...${NC}"
     docker compose up -d --build
@@ -101,13 +100,24 @@ fi
 # Run the TUI client
 export ORCHESTRATOR_URL=http://localhost:8081
 
+echo -e "${BLUE}Building TUI client...${NC}"
+go build -o bin/demo-client demo/main.go
+
 echo -e "${GREEN}Starting TUI client...${NC}"
 echo -e "${YELLOW}Press 'd' to start the demo workflow${NC}"
 echo -e "${YELLOW}Press 'q' to detach (orchestrator keeps running)${NC}"
 echo -e "${YELLOW}Press 'x' to shutdown orchestrator and quit${NC}"
 echo ""
 
-go run demo/main.go --url="$ORCHESTRATOR_URL"
+EXIT_CODE=0
+./bin/demo-client --url="$ORCHESTRATOR_URL" || EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 10 ]; then
+    echo -e "${YELLOW}Shutdown requested...${NC}"
+    docker compose down
+    echo -e "${GREEN}Services stopped${NC}"
+    exit 0
+fi
 
 # After TUI exits, services remain running (no automatic cleanup)
 echo ""

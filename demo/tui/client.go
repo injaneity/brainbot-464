@@ -61,14 +61,3 @@ func (c *OrchestratorClient) Start() error {
 
 	return nil
 }
-
-// Shutdown sends shutdown signal to orchestrator
-func (c *OrchestratorClient) Shutdown() error {
-	resp, err := c.client.Post(c.baseURL+"/api/shutdown", "application/json", bytes.NewReader([]byte("{}")))
-	if err != nil {
-		return fmt.Errorf("failed to shutdown: %w", err)
-	}
-	defer resp.Body.Close()
-
-	return nil
-}

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"orchestrator/types"
-	"time"
 )
 
 // handleStatus handles GET /api/status
@@ -49,27 +48,6 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 		"status":  "started",
 		"message": "Workflow initiated",
 	})
-}
-
-// handleShutdown handles POST /api/shutdown
-func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "shutting down",
-	})
-
-	// Shutdown in background
-	go func() {
-		time.Sleep(500 * time.Millisecond) // Give time to send response
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		s.Shutdown(ctx)
-	}()
 }
 
 // handleWebhook handles POST /webhook

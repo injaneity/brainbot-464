@@ -36,8 +36,15 @@ func main() {
 	}()
 
 	// Run the program
-	if _, err := program.Run(); err != nil {
+	finalModel, err := program.Run()
+	if err != nil {
 		fmt.Printf("Error running program: %v\n", err)
 		os.Exit(1)
+	}
+
+	if m, ok := finalModel.(tui.Model); ok {
+		if m.ExitCode != 0 {
+			os.Exit(m.ExitCode)
+		}
 	}
 }

@@ -38,9 +38,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "x", "X":
 		// Shutdown orchestrator and quit
-		if m.Connected {
-			m.OrchestratorClient.Shutdown()
-		}
+		m.ExitCode = 10
 		return m, tea.Quit
 
 	case "d", "D":
