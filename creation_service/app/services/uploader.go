@@ -166,12 +166,22 @@ func GenerateMetadata(input app.VideoInput, articleTitle string, sourceURL strin
 		title = title[:97] + "..."
 	}
 
-	description := fmt.Sprintf(
-		"Source: %s\n\n"+
-			"Follow for daily tech updates!\n"+
-			"#tech #ai #technology #shorts",
-		sourceURL,
-	)
+	// Build sources section from article_urls
+	var sourcesSection string
+	if len(input.ArticleURLs) > 0 {
+		sourcesSection = "Sources:\n"
+		for _, url := range input.ArticleURLs {
+			sourcesSection += url + "\n"
+		}
+		sourcesSection += "\n"
+	} else if sourceURL != "" {
+		// Fallback to old single source URL if article_urls not provided
+		sourcesSection = fmt.Sprintf("🔗 Source: %s\n\n", sourceURL)
+	}
+
+	description := sourcesSection +
+		"📱 Follow for daily tech updates!\n" +
+		"#tech #ai #technology #shorts"
 
 	tags := []string{
 		"tech news",

@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"brainbot/creation_service/app"
 	"brainbot/creation_service/app/config"
+
+	"golang.org/x/net/html"
 )
 
 // VideoProcessor handles the video creation and upload pipeline
@@ -138,8 +142,18 @@ func (p *VideoProcessor) ProcessVideoInput(input app.VideoInput, cleanup bool) e
 		return nil
 	}
 
-	// Use title from input, or generate from subtitles as fallback
+	// Use title from input, or fetch from first article URL, or generate from subtitles as fallback
 	articleTitle := input.Title
+	if articleTitle == "" && len(input.ArticleURLs) > 0 {
+		log.Printf("  Fetching title from: %s", input.ArticleURLs[0])
+		fetchedTitle, err := fetchTitleFromURL(input.ArticleURLs[0])
+		if err != nil {
+			log.Printf("  Warning: Failed to fetch title from URL: %v", err)
+		} else {
+			articleTitle = fetchedTitle
+			log.Printf("  Fetched title: %s", articleTitle)
+		}
+	}
 	if articleTitle == "" {
 		articleTitle = generateTitleFromSubtitles(input.SubtitleTimestamps)
 	}
@@ -182,6 +196,50 @@ func getBackgroundVideos(dir string) ([]string, error) {
 	}
 
 	return files, nil
+}
+
+// fetchTitleFromURL fetches the HTML title from a given URL
+func fetchTitleFromURL(url string) (string, error) {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP error: %d", resp.StatusCode)
+	}
+
+	doc, err := html.Parse(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse HTML: %w", err)
+	}
+
+	var title string
+	var findTitle func(*html.Node)
+	findTitle = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "title" {
+			if n.FirstChild != nil {
+				title = n.FirstChild.Data
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if title == "" {
+				findTitle(c)
+			}
+		}
+	}
+	findTitle(doc)
+
+	if title == "" {
+		return "", fmt.Errorf("no title found in HTML")
+	}
+
+	return strings.TrimSpace(title), nil
 }
 
 // generateTitleFromSubtitles creates a video title from subtitle timestamps
