@@ -183,7 +183,7 @@ func handleProcessArticle(c *gin.Context) {
 		}
 
 		// Generate Pre-signed URL
-		presignedURL, err = s3Client.GeneratePresignedURL(c.Request.Context(), req.Article.ID, 15*time.Minute)
+		presignedURL, err = s3Client.GeneratePresignedURL(c.Request.Context(), req.Article.ID, 12*time.Hour)
 		if err != nil {
 			log.Printf("Error generating presigned URL for article %s: %v", req.Article.ID, err)
 		}
