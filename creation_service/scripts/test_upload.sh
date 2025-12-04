@@ -21,7 +21,7 @@
 #   --category-id <id>       YouTube category (default: 28)
 #   --client-secret <path>   OAuth client secret JSON (default: scripts/client_secret.json)
 #   --token-json <path>      Token cache JSON (default: slot-specific cache)
-#   --env-file <path>        File to store YOUTUBE_* env vars (default: .secrets/youtube.env)
+#   --env-file <path>        File to store YOUTUBE_* env vars (default: repo-root/.env)
 #   --scope <scope>          OAuth scope (default: https://www.googleapis.com/auth/youtube.upload)
 #   --force-refresh          Re-run OAuth consent even if tokens exist
 #   --slot <n>               Account slot to use (default: 1)
@@ -32,7 +32,7 @@ set -euo pipefail
 SERVICE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 REPO_ROOT=$(cd "$SERVICE_DIR/.." && pwd)
 DEFAULT_CLIENT_SECRET="$SERVICE_DIR/scripts/client_secret.json"
-DEFAULT_ENV_FILE="$SERVICE_DIR/.secrets/youtube.env"
+DEFAULT_ENV_FILE="$REPO_ROOT/.env"
 DEFAULT_SCOPE="https://www.googleapis.com/auth/youtube.upload"
 DEFAULT_SLOT="1"
 

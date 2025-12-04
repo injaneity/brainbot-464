@@ -161,7 +161,7 @@ services:
       dockerfile: creation_service/Dockerfile
     container_name: brainbot-creation-tech
     env_file:
-      - ./creation_service/.secrets/youtube.env
+      - ./.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-tech
@@ -174,7 +174,6 @@ services:
       - brainbot-network
     restart: unless-stopped
     volumes:
-      - ./creation_service/.secrets:/root/.secrets:ro
       - ./creation_service/outputs/tech:/root/outputs
 
   creation-service-finance:
@@ -183,7 +182,7 @@ services:
       dockerfile: creation_service/Dockerfile
     container_name: brainbot-creation-finance
     env_file:
-      - ./creation_service/.secrets/youtube.env
+      - ./.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-finance
@@ -196,7 +195,6 @@ services:
       - brainbot-network
     restart: unless-stopped
     volumes:
-      - ./creation_service/.secrets:/root/.secrets:ro
       - ./creation_service/outputs/finance:/root/outputs
 
   creation-service-other:
@@ -205,7 +203,7 @@ services:
       dockerfile: creation_service/Dockerfile
     container_name: brainbot-creation-other
     env_file:
-      - ./creation_service/.secrets/youtube.env
+      - ./.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-other
@@ -218,7 +216,6 @@ services:
       - brainbot-network
     restart: unless-stopped
     volumes:
-      - ./creation_service/.secrets:/root/.secrets:ro
       - ./creation_service/outputs/other:/root/outputs
 
 networks:

@@ -8,20 +8,21 @@
 # Optional flags:
 #   --client-secret <path>  Path to Google OAuth client JSON (default: scripts/client_secret.json)
 #   --token-json <path>     Cache file for OAuth tokens (default: .secrets/youtube_oauth_slot<slot>.json)
-#   --env-file <path>       Path to write shell env vars (default: .secrets/youtube.env)
+#   --env-file <path>       Path to write shell env vars (default: repo-root/.env)
 #   --force-refresh         Force running the OAuth consent flow again
 #   --scope <value>         OAuth scope to request (default: https://www.googleapis.com/auth/youtube.upload)
 #   --slot <n>              Numeric account slot to update (default: 1)
 #
-# After running, source the env file in your shell or pass it via `env $(cat .secrets/youtube.env xargs)`
+# After running, source the env file in your shell or pass it via `env $(cat .env xargs)`
 # before starting the creation service manually.
 
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+REPO_ROOT=$(cd "$ROOT_DIR/.." && pwd)
 DEFAULT_CLIENT_SECRET="$ROOT_DIR/scripts/client_secret.json"
 DEFAULT_TOKEN_JSON="$ROOT_DIR/.secrets/youtube_oauth.json"
-DEFAULT_ENV_FILE="$ROOT_DIR/.secrets/youtube.env"
+DEFAULT_ENV_FILE="$REPO_ROOT/.env"
 DEFAULT_SCOPE="https://www.googleapis.com/auth/youtube.upload"
 DEFAULT_SLOT="1"
 
