@@ -20,20 +20,17 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 
 	results := r.stateManager.GetDedupResults()
 
-	// Collect article texts
-	var articleTexts []string
+	// Find presigned URL from first new article
+	var presignedURL string
 	for _, res := range results {
-		if res.Status == "new" && res.Article != nil {
-			text := res.Article.FullContentText
-			if text == "" {
-				text = res.Article.Summary
-			}
-			articleTexts = append(articleTexts, text)
+		if res.Status == "new" && res.PresignedURL != "" {
+			presignedURL = res.PresignedURL
+			break
 		}
 	}
 
-	if len(articleTexts) == 0 {
-		r.stateManager.AddLog("No new articles to send for generation. Workflow complete.")
+	if presignedURL == "" {
+		r.stateManager.AddLog("No presigned URL available for new articles. Workflow complete.")
 		r.stateManager.SetState(types.StateComplete)
 		return nil
 	}
@@ -41,8 +38,8 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	reqUUID := uuid.New().String()
 
 	requestBody := map[string]interface{}{
-		"uuid":     reqUUID,
-		"articles": articleTexts,
+		"uuid":          reqUUID,
+		"presigned_url": presignedURL,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
