@@ -40,14 +40,6 @@ cleanup() {
 # Only cleanup on INT/TERM, not on normal exit (to support detach)
 trap cleanup INT TERM
 
-# Check credentials
-CREATION_ENV_FILE="creation_service/.secrets/youtube.env"
-if [ ! -f "$CREATION_ENV_FILE" ]; then
-    echo -e "${RED}Missing $CREATION_ENV_FILE${NC}"
-    echo -e "${YELLOW}Run: creation_service/scripts/setup_creation_service_credentials.sh${NC}"
-    exit 1
-fi
-
 GEN_ENV_FILE="generation_service/.env"
 
 if [ ! -f "$GEN_ENV_FILE" ]; then
@@ -68,7 +60,7 @@ fi
 ROOT_ENV_FILE=".env"
 if [ ! -f "$ROOT_ENV_FILE" ]; then
     echo -e "${RED}Missing root .env file${NC}"
-    echo -e "${YELLOW}Please create .env with S3 and Redis configuration (see .env.example)${NC}"
+    echo -e "${YELLOW}Please create .env with S3/Redis/YouTube configuration (see .env.example)${NC}"
     exit 1
 fi
 
@@ -80,8 +72,28 @@ if ! grep -q '^S3_BUCKET=' "$ROOT_ENV_FILE"; then
 fi
 
 set -a
-source "$CREATION_ENV_FILE"
+# shellcheck disable=SC1091
+source "$ROOT_ENV_FILE"
 set +a
+
+REQUIRED_SLOTS=(1 2 3)
+MISSING_KEYS=()
+for slot in "${REQUIRED_SLOTS[@]}"; do
+    for base_var in YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN; do
+        key="${base_var}_${slot}"
+        if [[ -z "${!key:-}" ]]; then
+            MISSING_KEYS+=("$key")
+        fi
+    done
+done
+
+if (( ${#MISSING_KEYS[@]} > 0 )); then
+    echo -e "${RED}Missing per-slot YouTube credentials (${MISSING_KEYS[*]}).${NC}"
+    echo -e "${YELLOW}Run creation_service/scripts/setup_creation_service_credentials.sh --slot <1|2|3> --env-file ./.env to populate them.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}All YouTube account slots detected. Launching tech/finance/other creation services...${NC}"
 
 # Check if orchestrator is already running
 ORCHESTRATOR_RUNNING=$(docker ps -q -f name=brainbot-orchestrator 2>/dev/null)

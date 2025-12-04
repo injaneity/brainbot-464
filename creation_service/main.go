@@ -1,16 +1,18 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"brainbot/creation_service/app/api"
 	"brainbot/creation_service/app/config"
 	"brainbot/creation_service/app/kafka"
 	"brainbot/creation_service/app/services"
-	
+
 	"github.com/joho/godotenv"
 )
 
@@ -20,11 +22,8 @@ const (
 )
 
 func main() {
-	// Load environment variables from .secrets/youtube.env
-	if err := godotenv.Load(".secrets/youtube.env"); err != nil {
-		log.Printf("No .secrets/youtube.env file found, using system environment variables")
-	}
-	
+	loadEnvOrFallback()
+
 	// Command-line flags
 	batchMode := flag.Bool("batch", false, "Run in batch mode (process files from input/ directory)")
 	kafkaMode := flag.Bool("kafka", false, "Run in Kafka consumer mode (consume from Kafka topic)")
@@ -82,5 +81,42 @@ func main() {
 
 	if err := http.ListenAndServe(*apiPort, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+func loadEnvOrFallback() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Unable to determine working directory: %v", err)
+		return
+	}
+
+	candidates := []string{
+		filepath.Join(cwd, "..", ".env"),              // repo root when running inside creation_service/
+		filepath.Join(cwd, ".env"),                    // repo root when running from project root
+		filepath.Join(cwd, ".secrets", "youtube.env"), // legacy fallback
+	}
+
+	seen := make(map[string]struct{})
+	for _, path := range candidates {
+		clean := filepath.Clean(path)
+		if _, ok := seen[clean]; ok {
+			continue
+		}
+		seen[clean] = struct{}{}
+
+		if _, err := os.Stat(clean); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				log.Printf("Failed to stat %s: %v", clean, err)
+			}
+			continue
+		}
+
+		if err := godotenv.Load(clean); err != nil {
+			log.Printf("Failed to load env file %s: %v", clean, err)
+			continue
+		}
+		log.Printf("Loaded environment variables from %s", clean)
+		break
 	}
 }

@@ -26,7 +26,7 @@ func NewVideoProcessor(backgroundsDir string) (*VideoProcessor, error) {
 	// Try to initialize uploader, but allow it to fail for testing
 	uploader, err := NewUploader()
 	skipUpload := false
-	
+
 	if err != nil {
 		log.Printf("YouTube uploader not initialized (missing credentials): %v", err)
 		log.Println("Running in VIDEO-ONLY mode (no upload)")
@@ -55,15 +55,15 @@ func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read JSON files: %w", err)
 	}
-	
+
 	txtFiles, err := filepath.Glob(filepath.Join(inputDir, "*.txt"))
 	if err != nil {
 		return fmt.Errorf("failed to read txt files: %w", err)
 	}
-	
+
 	// Combine both file lists
 	allFiles := append(jsonFiles, txtFiles...)
-	
+
 	if len(allFiles) == 0 {
 		log.Println("No JSON or TXT files found in input/ directory")
 		return nil

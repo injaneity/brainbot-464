@@ -118,27 +118,48 @@ Create `.env` file in project root:
 cp .env.example .env
 ```
 
-Edit `.env` with your API keys:
+Edit `.env` with your credentials:
 
 ```env
-# Generation Service
-GEMINI_API_KEY=your_gemini_api_key
-FAL_KEY=your_fal_api_key
+# Storage & ingestion
+S3_BUCKET=brainbot-464
+S3_REGION=ap-southeast-2
+S3_PREFIX=articles/
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+COHERE_API_KEY=
+# Optional alternative
+OPENAI_API_KEY=
 
-# Ingestion Service (choose one)
-COHERE_API_KEY=your_cohere_key
-# OR
-OPENAI_API_KEY=your_openai_key
+# Creation service / YouTube (populated by setup script)
+YOUTUBE_ACCOUNT_SLOT=1
+YOUTUBE_CLIENT_ID_1=
+YOUTUBE_CLIENT_SECRET_1=
+YOUTUBE_REFRESH_TOKEN_1=
+
+# Generation service
+GEMINI_API_KEY=
+FAL_KEY=
 ```
 
 ### 3. Set Up YouTube OAuth
 
 ```bash
 cd creation_service/scripts
-./setup_creation_service_credentials.sh
+./setup_creation_service_credentials.sh --slot 1 --client-secret client_secret.json
 ```
 
-This will guide you through YouTube OAuth setup and create `creation_service/.secrets/youtube.env`.
+Run the same command with `--slot 2`, `--slot 3`, etc. (and their corresponding `client_secret_X.json` files) to register additional channels. The script keeps the project root `.env` up to date with per-slot secrets plus a `YOUTUBE_ACCOUNT_SLOT` default, so you only need to flip that value to switch accounts.
+
+When you later start the stack via Docker, three creation-service containers spin up automatically, each pinned to one of those slots and listening to a dedicated Kafka topic:
+
+| Service | Kafka topic | Consumer group | YouTube slot | Output dir |
+|---------|-------------|----------------|--------------|------------|
+| `creation-service-tech` | `video-requests-tech` | `creation-service-tech` | 1 | `creation_service/outputs/tech` |
+| `creation-service-finance` | `video-requests-finance` | `creation-service-finance` | 2 | `creation_service/outputs/finance` |
+| `creation-service-other` | `video-requests-other` | `creation-service-other` | 3 | `creation_service/outputs/other` |
+
+The generation service classifies each article into one of those topics, so uploads automatically land in the matching YouTube account.
 
 ### 4. Start Services
 
@@ -185,7 +206,9 @@ docker-compose logs -f
 # View logs (specific service)
 docker-compose logs -f ingestion-service
 docker-compose logs -f generation-service
-docker-compose logs -f creation-service
+docker-compose logs -f creation-service-tech
+docker-compose logs -f creation-service-finance
+docker-compose logs -f creation-service-other
 
 # Stop services
 docker-compose down
@@ -230,7 +253,8 @@ python -m app.main
 
 # Creation service (Kafka consumer mode)
 cd creation_service
-source .secrets/youtube.env
+source ../.env
+export YOUTUBE_ACCOUNT_SLOT=1   # set to 2/3/etc to pick another channel
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9093
 go run main.go -kafka
 
@@ -407,7 +431,7 @@ See [creation_service/README.md](creation_service/README.md) for details.
 ## Security
 
 - **Never commit credentials** - All secrets are in `.env` or `.secrets/` (gitignored)
-- **YouTube OAuth tokens** - Stored in `creation_service/.secrets/youtube.env`
+- **YouTube OAuth tokens** - Stored in the project root `.env` (per-slot caches stay under `creation_service/.secrets/`)
 - **API keys** - Loaded from environment variables only
 - **Docker secrets** - Use environment variables or Docker secrets in production
 

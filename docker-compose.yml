@@ -155,27 +155,68 @@ services:
       - brainbot-network
     restart: unless-stopped
 
-  creation-service:
+  creation-service-tech:
     build:
       context: .
       dockerfile: creation_service/Dockerfile
-    container_name: brainbot-creation
+    container_name: brainbot-creation-tech
     env_file:
-    - ./creation_service/.secrets/youtube.env
+      - ./.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_TOPIC_VIDEO_REQUESTS: video-processing-requests
-      KAFKA_CONSUMER_GROUP_ID: creation-service-consumer-group
+      KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-tech
+      KAFKA_CONSUMER_GROUP_ID: creation-service-tech
+      YOUTUBE_ACCOUNT_SLOT: "1"
     depends_on:
       kafka:
         condition: service_healthy
     networks:
       - brainbot-network
     restart: unless-stopped
-    # Mount credentials if using file-based config
     volumes:
-      - ./creation_service/.secrets:/root/.secrets:ro
-      - ./creation_service/outputs:/root/outputs
+      - ./creation_service/outputs/tech:/root/outputs
+
+  creation-service-finance:
+    build:
+      context: .
+      dockerfile: creation_service/Dockerfile
+    container_name: brainbot-creation-finance
+    env_file:
+      - ./.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-finance
+      KAFKA_CONSUMER_GROUP_ID: creation-service-finance
+      YOUTUBE_ACCOUNT_SLOT: "2"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+    volumes:
+      - ./creation_service/outputs/finance:/root/outputs
+
+  creation-service-other:
+    build:
+      context: .
+      dockerfile: creation_service/Dockerfile
+    container_name: brainbot-creation-other
+    env_file:
+      - ./.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_VIDEO_REQUESTS: video-requests-other
+      KAFKA_CONSUMER_GROUP_ID: creation-service-other
+      YOUTUBE_ACCOUNT_SLOT: "3"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - brainbot-network
+    restart: unless-stopped
+    volumes:
+      - ./creation_service/outputs/other:/root/outputs
 
 networks:
   brainbot-network:
