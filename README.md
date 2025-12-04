@@ -4,8 +4,6 @@ Automated RSS-to-YouTube pipeline using AI. Fetches articles, generates video co
 
 ## Quick Start
 
-### Docker Mode (Recommended)
-
 ```bash
 # 1. Set up YouTube credentials
 cd creation_service/scripts
@@ -17,22 +15,17 @@ cp .env.example .env
 # Edit .env and add your GEMINI_API_KEY and FAL_KEY
 
 # 3. Run the demo
-./run-demo-docker.sh
+./run-demo.sh
 ```
 
 Press `d` in the demo to start processing!
 
-### Local Development Mode
-
-```bash
-./run-demo.sh
-```
+> **Note:** The first time you run the generation service, it will take a while to start as it downloads the AI model to your local file system.
 
 ## Prerequisites
 
 - Docker & Docker Compose
 - Go 1.24+
-- Python 3.9+ (for local generation service)
 - API Keys:
   - **Google Gemini API** - For script generation
   - **FAL.ai API** - For video/audio generation
@@ -74,6 +67,8 @@ Press `d` in the demo to start processing!
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Persistence:** ChromaDB (vector store) and Redis (Bloom filter) data are persisted to disk, so deduplication state is preserved across restarts.
+
 ## Project Structure
 
 ```
@@ -96,18 +91,11 @@ See individual service READMEs for details:
 ### 1. Clone & Install Dependencies
 
 ```bash
-git clone <repository-url>
+git clone --recurse-submodules <repository-url>
 cd brainbot-464
 
 # Go dependencies
 go mod download
-
-# Python dependencies (for local mode)
-cd generation_service
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-pip install -r requirements.txt
-cd ..
 ```
 
 ### 2. Configure Environment
@@ -164,11 +152,12 @@ The generation service classifies each article into one of those topics, so uplo
 ### 4. Start Services
 
 ```bash
-# Auto-detects and uses Docker if available (recommended)
 ./run-demo.sh
+```
 
-# Or force local mode
-./run-demo.sh --local
+For headless mode (no interactive UI):
+```bash
+./run-demo.sh --headless
 ```
 
 Press 'd' in the demo to start processing!
