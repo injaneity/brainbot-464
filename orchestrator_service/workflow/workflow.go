@@ -51,6 +51,10 @@ func (r *Runner) Run(ctx context.Context, feedPreset string) error {
 		return err
 	}
 
+	if r.stateManager.GetState() == types.StateComplete {
+		return nil
+	}
+
 	// Step 5: Wait for webhook (async - webhook handler will update state)
 	r.stateManager.AddLog("Workflow initiated successfully, waiting for generation service callback via Kafka")
 	return nil
@@ -79,6 +83,10 @@ func (r *Runner) RunRefresh(ctx context.Context, feedPreset string) error {
 	if err := r.sendGenerationRequest(ctx); err != nil {
 		r.stateManager.SetError(fmt.Errorf("send generation: %w", err))
 		return err
+	}
+
+	if r.stateManager.GetState() == types.StateComplete {
+		return nil
 	}
 
 	// Step 5: Wait for webhook (async - webhook handler will update state)
@@ -168,13 +176,24 @@ func (r *Runner) deduplicateArticles(ctx context.Context) error {
 	r.stateManager.SetDedupResults(results)
 
 	newCount := 0
+	dupCount := 0
+	failCount := 0
+	errCount := 0
+
 	for _, res := range results {
-		if res.Status == "new" {
+		switch res.Status {
+		case "new":
 			newCount++
+		case "duplicate":
+			dupCount++
+		case "failed":
+			failCount++
+		case "error":
+			errCount++
 		}
 	}
 
-	r.stateManager.AddLog(fmt.Sprintf("Found %d new articles", newCount))
+	r.stateManager.AddLog(fmt.Sprintf("Results: %d new, %d duplicates, %d failed, %d errors", newCount, dupCount, failCount, errCount))
 	return nil
 }
 

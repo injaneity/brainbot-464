@@ -67,16 +67,16 @@ func (c *CohereEmbeddings) EmbedTexts(texts []string) ([][]float32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// For v3 models, InputType is required. We use search_document consistently
-	// for both documents and queries to keep a single vector space.
-	req := &cohere.EmbedRequest{
-		Texts:          texts,
-		Model:          &c.model,
-		InputType:      cohere.EmbedInputTypeSearchDocument.Ptr(),
-		EmbeddingTypes: []cohere.EmbeddingType{cohere.EmbeddingTypeFloat},
-	}
-
-	resp, err := c.client.Embed(ctx, req)
+	// Use the V2.Embed API which has better HTTP/2 handling
+	resp, err := c.client.V2.Embed(
+		ctx,
+		&cohere.V2EmbedRequest{
+			Texts:          texts,
+			Model:          c.model,
+			InputType:      cohere.EmbedInputTypeSearchDocument,
+			EmbeddingTypes: []cohere.EmbeddingType{cohere.EmbeddingTypeFloat},
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("cohere embed error: %w", err)
 	}
@@ -84,12 +84,12 @@ func (c *CohereEmbeddings) EmbedTexts(texts []string) ([][]float32, error) {
 		return nil, errors.New("cohere embed returned empty response")
 	}
 
-	var floats [][]float64
-	if byType := resp.GetEmbeddingsByType(); byType != nil && byType.Embeddings != nil {
-		floats = byType.Embeddings.GetFloat()
-	} else if f := resp.GetEmbeddingsFloats(); f != nil {
-		floats = f.GetEmbeddings()
+	// Extract float embeddings from the response
+	if resp.Embeddings == nil || resp.Embeddings.Float == nil {
+		return nil, errors.New("cohere embed returned no float embeddings")
 	}
+
+	floats := resp.Embeddings.Float
 	if len(floats) != len(texts) {
 		return nil, errors.New("embedding count mismatch")
 	}

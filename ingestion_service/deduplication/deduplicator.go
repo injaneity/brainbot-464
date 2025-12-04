@@ -146,6 +146,11 @@ func (d *Deduplicator) AddExactDuplicate(ctx context.Context, article *types.Art
 		return fmt.Errorf("failed to add Title to bloom filter: %w", err)
 	}
 
+	// Refresh TTL on both Bloom filter keys (24 hours)
+	// This ensures the filters expire 24 hours after the last addition
+	d.redis.Expire(ctx, "articles:bloom:url", TTL)
+	d.redis.Expire(ctx, "articles:bloom:title", TTL)
+
 	return nil
 }
 
@@ -446,6 +451,22 @@ func (d *Deduplicator) CleanupOldArticles() error {
 	log.Printf("Cutoff time for cleanup: %s", cutoffTime.Format(time.RFC3339))
 
 	// TODO: Implement actual cleanup logic when Chroma provides better metadata querying
+	return nil
+}
+
+// ClearBloomFilter clears the Redis Bloom filter keys
+func (d *Deduplicator) ClearBloomFilter(ctx context.Context) error {
+	if d.redis == nil {
+		return nil
+	}
+
+	// Delete the keys
+	keys := []string{"articles:bloom:url", "articles:bloom:title"}
+	if err := d.redis.Del(ctx, keys...).Err(); err != nil {
+		return fmt.Errorf("failed to delete bloom filter keys: %w", err)
+	}
+
+	log.Println("Cleared Redis Bloom filter keys")
 	return nil
 }
 
