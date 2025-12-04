@@ -87,7 +87,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("🤖 Orchestrator Service\n")
+	fmt.Printf("Orchestrator Service\n")
 	fmt.Printf("   API:            http://0.0.0.0:%s\n", *port)
 	fmt.Printf("   Webhook:        http://0.0.0.0:%s/webhook\n", *webhookPort)
 	fmt.Printf("   Cron Schedule:  %s\n", *cronSchedule)

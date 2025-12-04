@@ -22,7 +22,7 @@ const (
 func main() {
 	// Load environment variables from .secrets/youtube.env
 	if err := godotenv.Load(".secrets/youtube.env"); err != nil {
-		log.Printf("⚠️  No .secrets/youtube.env file found, using system environment variables")
+		log.Printf("No .secrets/youtube.env file found, using system environment variables")
 	}
 	
 	// Command-line flags
@@ -31,26 +31,26 @@ func main() {
 	apiPort := flag.String("port", DefaultAPIPort, "API server port (e.g., :8081)")
 	flag.Parse()
 
-	log.Println("🎬 Video Creation Service - Starting...")
+	log.Println("Video Creation Service - Starting...")
 
 	// Initialize video processor
 	proc, err := services.NewVideoProcessor(config.BackgroundsDir)
 	if err != nil {
-		log.Fatalf("❌ Failed to initialize processor: %v", err)
+		log.Fatalf("Failed to initialize processor: %v", err)
 	}
 
 	if *batchMode {
 		// Batch mode: Process all files in input/ directory
-		log.Println("📁 Running in BATCH mode")
+		log.Println("Running in BATCH mode")
 		if err := proc.ProcessFromDirectory(config.InputDir); err != nil {
-			log.Fatalf("❌ Batch processing failed: %v", err)
+			log.Fatalf("Batch processing failed: %v", err)
 		}
 		os.Exit(0)
 	}
 
 	if *kafkaMode {
 		// Kafka mode: Consume from Kafka topic
-		log.Println("📨 Running in KAFKA consumer mode")
+		log.Println("Running in KAFKA consumer mode")
 
 		kafkaConfig := kafka.ConsumerConfig{
 			Brokers:   kafka.GetKafkaBrokers(),
@@ -59,28 +59,28 @@ func main() {
 			Processor: proc,
 		}
 
-		log.Printf("🔗 Kafka Brokers: %v", kafkaConfig.Brokers)
-		log.Printf("📋 Topic: %s", kafkaConfig.Topic)
-		log.Printf("👥 Consumer Group: %s", kafkaConfig.GroupID)
+		log.Printf("Kafka Brokers: %v", kafkaConfig.Brokers)
+		log.Printf("Topic: %s", kafkaConfig.Topic)
+		log.Printf("Consumer Group: %s", kafkaConfig.GroupID)
 
 		if err := kafka.StartConsumerWithGracefulShutdown(kafkaConfig); err != nil {
-			log.Fatalf("❌ Kafka consumer failed: %v", err)
+			log.Fatalf("Kafka consumer failed: %v", err)
 		}
 		os.Exit(0)
 	}
 
 	// API mode: Start HTTP server
-	log.Println("🌐 Running in API mode")
+	log.Println("Running in API mode")
 
 	apiServer := api.NewServer(proc)
 	mux := apiServer.SetupRoutes()
 
-	log.Printf("🚀 API Server listening on %s", *apiPort)
-	log.Println("📌 Endpoints:")
+	log.Printf("API Server listening on %s", *apiPort)
+	log.Println("Endpoints:")
 	log.Println("   POST /api/process-video  - Process video from JSON")
 	log.Println("   GET  /health             - Health check")
 
 	if err := http.ListenAndServe(*apiPort, mux); err != nil {
-		log.Fatalf("❌ Server failed: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
 }
