@@ -220,6 +220,29 @@ func handleClearCache(c *gin.Context) {
 		return
 	}
 
+	// Also clear Redis Bloom filter keys
+	redisConfig := deduplication.RedisConfig{
+		Addr:     getEnvOrDefault("REDIS_ADDR", "localhost:6379"),
+		Password: getEnvOrDefault("REDIS_PASSWORD", ""),
+		DB:       getEnvPortOrDefault("REDIS_DB", 0),
+	}
+
+	deduplicator, err := deduplication.NewDeduplicator(deduplication.DeduplicatorConfig{
+		ChromaConfig: chromaConfig,
+		RedisConfig:  redisConfig,
+	})
+	if err == nil {
+		defer deduplicator.Close()
+		// We need to expose a method to clear Redis keys in Deduplicator, or do it manually here.
+		// Since Deduplicator struct has private redis client, we should add a method there.
+		// For now, let's assume we can add a method ClearBloomFilter to Deduplicator.
+		if err := deduplicator.ClearBloomFilter(c.Request.Context()); err != nil {
+			log.Printf("Warning: Failed to clear Redis Bloom filter: %v", err)
+		}
+	} else {
+		log.Printf("Warning: Failed to connect to Redis for clearing: %v", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "cleared",
 	})

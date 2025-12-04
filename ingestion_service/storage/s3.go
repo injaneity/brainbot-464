@@ -47,6 +47,8 @@ func (s *S3Client) CreateArticleObject(ctx context.Context, id, title, content s
 	// Format: Title\nContent
 	data := fmt.Sprintf("%s\n%s", title, content)
 
+	log.Printf("Creating S3 object: bucket=%s, key=%s, dataLen=%d", s.bucket, key, len(data))
+
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -55,6 +57,8 @@ func (s *S3Client) CreateArticleObject(ctx context.Context, id, title, content s
 	if err != nil {
 		return fmt.Errorf("failed to upload object to S3: %w", err)
 	}
+
+	log.Printf("Successfully created S3 object: %s", key)
 	return nil
 }
 
@@ -97,6 +101,8 @@ func (s *S3Client) AppendToArticleObject(ctx context.Context, id, newContent str
 func (s *S3Client) GeneratePresignedURL(ctx context.Context, id string, lifetime time.Duration) (string, error) {
 	key := s.prefix + id
 
+	log.Printf("Generating presigned URL for: bucket=%s, key=%s, lifetime=%v", s.bucket, key, lifetime)
+
 	req, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -107,5 +113,6 @@ func (s *S3Client) GeneratePresignedURL(ctx context.Context, id string, lifetime
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
 
+	log.Printf("Generated presigned URL: %s", req.URL)
 	return req.URL, nil
 }

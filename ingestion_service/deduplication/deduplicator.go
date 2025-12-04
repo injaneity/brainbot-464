@@ -449,6 +449,22 @@ func (d *Deduplicator) CleanupOldArticles() error {
 	return nil
 }
 
+// ClearBloomFilter clears the Redis Bloom filter keys
+func (d *Deduplicator) ClearBloomFilter(ctx context.Context) error {
+	if d.redis == nil {
+		return nil
+	}
+
+	// Delete the keys
+	keys := []string{"articles:bloom:url", "articles:bloom:title"}
+	if err := d.redis.Del(ctx, keys...).Err(); err != nil {
+		return fmt.Errorf("failed to delete bloom filter keys: %w", err)
+	}
+
+	log.Println("Cleared Redis Bloom filter keys")
+	return nil
+}
+
 // Close closes the deduplicator and cleans up resources
 func (d *Deduplicator) Close() error {
 	if d.redis != nil {
