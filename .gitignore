@@ -53,3 +53,4 @@ venv/
 *.pid
 
 /bin
+redis_data/

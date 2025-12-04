@@ -146,6 +146,11 @@ func (d *Deduplicator) AddExactDuplicate(ctx context.Context, article *types.Art
 		return fmt.Errorf("failed to add Title to bloom filter: %w", err)
 	}
 
+	// Refresh TTL on both Bloom filter keys (24 hours)
+	// This ensures the filters expire 24 hours after the last addition
+	d.redis.Expire(ctx, "articles:bloom:url", TTL)
+	d.redis.Expire(ctx, "articles:bloom:title", TTL)
+
 	return nil
 }
 
