@@ -38,6 +38,7 @@ func (c *IngestionClient) ProcessArticle(ctx context.Context, article *types.Art
 	var result struct {
 		Status              string                      `json:"status"`
 		DeduplicationResult *types.DeduplicationResult `json:"deduplication_result,omitempty"`
+		PresignedURL        string                      `json:"presigned_url,omitempty"`
 		Error               string                      `json:"error,omitempty"`
 	}
 
@@ -49,6 +50,7 @@ func (c *IngestionClient) ProcessArticle(ctx context.Context, article *types.Art
 		Article:             article,
 		Status:              result.Status,
 		DeduplicationResult: result.DeduplicationResult,
+		PresignedURL:        result.PresignedURL,
 		Error:               result.Error,
 	}, nil
 }

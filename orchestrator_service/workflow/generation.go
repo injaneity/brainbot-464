@@ -33,7 +33,9 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	}
 
 	if len(articleTexts) == 0 {
-		return fmt.Errorf("no new articles to send for generation")
+		r.stateManager.AddLog("No new articles to send for generation. Workflow complete.")
+		r.stateManager.SetState(types.StateComplete)
+		return nil
 	}
 
 	reqUUID := uuid.New().String()

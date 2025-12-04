@@ -2,10 +2,13 @@ package deduplication
 
 import (
 	"brainbot/ingestion_service/types"
+	"context"
 	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -29,9 +32,10 @@ type VectorClient interface {
 // DeduplicationResult contains the result of deduplication check
 type DeduplicationResult = types.DeduplicationResult
 
-// Deduplicator handles article deduplication using vector embeddings
+// Deduplicator handles article deduplication using vector embeddings and Redis Bloom filter
 type Deduplicator struct {
 	vector              VectorClient
+	redis               *redis.Client
 	similarityThreshold float32
 	maxSearchResults    int
 }
@@ -39,8 +43,15 @@ type Deduplicator struct {
 // DeduplicatorConfig holds configuration for the deduplicator
 type DeduplicatorConfig struct {
 	ChromaConfig        ChromaConfig
+	RedisConfig         RedisConfig
 	SimilarityThreshold float32 // Default: 0.95 (95%)
 	MaxSearchResults    int     // Default: 5
+}
+
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
 }
 
 // NewDeduplicator creates a new instance of the deduplicator
@@ -53,8 +64,23 @@ func NewDeduplicator(config DeduplicatorConfig) (*Deduplicator, error) {
 		return nil, fmt.Errorf("failed to initialize Chroma: %w", err)
 	}
 
+	// Initialize Redis connection
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisConfig.Addr,
+		Password: cfg.RedisConfig.Password,
+		DB:       cfg.RedisConfig.DB,
+	})
+
+	// Test Redis connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v. Bloom filter will be disabled.", err)
+	}
+
 	return &Deduplicator{
 		vector:              chroma,
+		redis:               rdb,
 		similarityThreshold: cfg.SimilarityThreshold,
 		maxSearchResults:    cfg.MaxSearchResults,
 	}, nil
@@ -73,6 +99,59 @@ func NewDeduplicatorWithClient(client VectorClient, config DeduplicatorConfig) (
 		similarityThreshold: cfg.SimilarityThreshold,
 		maxSearchResults:    cfg.MaxSearchResults,
 	}, nil
+}
+
+// CheckExactDuplicate checks if the article is an exact duplicate using Redis Bloom filter
+func (d *Deduplicator) CheckExactDuplicate(ctx context.Context, article *types.Article) (bool, error) {
+	if d.redis == nil {
+		return false, nil
+	}
+
+	// Check URL
+	existsURL, err := d.redis.Do(ctx, "BF.EXISTS", "articles:bloom:url", article.URL).Bool()
+	if err != nil {
+		return false, fmt.Errorf("failed to check URL in bloom filter: %w", err)
+	}
+	if existsURL {
+		return true, nil
+	}
+
+	// Check Title
+	existsTitle, err := d.redis.Do(ctx, "BF.EXISTS", "articles:bloom:title", article.Title).Bool()
+	if err != nil {
+		return false, fmt.Errorf("failed to check Title in bloom filter: %w", err)
+	}
+	if existsTitle {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// AddExactDuplicate adds the article to the Redis Bloom filter
+func (d *Deduplicator) AddExactDuplicate(ctx context.Context, article *types.Article) error {
+	if d.redis == nil {
+		return nil
+	}
+
+	// Add URL
+	_, err := d.redis.Do(ctx, "BF.ADD", "articles:bloom:url", article.URL).Result()
+	if err != nil {
+		return fmt.Errorf("failed to add URL to bloom filter: %w", err)
+	}
+
+	// Add Title
+	_, err = d.redis.Do(ctx, "BF.ADD", "articles:bloom:title", article.Title).Result()
+	if err != nil {
+		return fmt.Errorf("failed to add Title to bloom filter: %w", err)
+	}
+
+	// Refresh TTL on both Bloom filter keys (24 hours)
+	// This ensures the filters expire 24 hours after the last addition
+	d.redis.Expire(ctx, "articles:bloom:url", TTL)
+	d.redis.Expire(ctx, "articles:bloom:title", TTL)
+
+	return nil
 }
 
 // CheckForDuplicates checks if the given article is a duplicate of existing articles
@@ -212,14 +291,34 @@ func (d *Deduplicator) AddArticle(article *types.Article) error {
 }
 
 // ProcessArticle performs both duplicate check and addition if not duplicate
-func (d *Deduplicator) ProcessArticle(article *types.Article) (*DeduplicationResult, error) {
-	// First check for duplicates
+func (d *Deduplicator) ProcessArticle(ctx context.Context, article *types.Article) (*DeduplicationResult, error) {
+	// 1. Check Exact Duplicate (Redis Bloom)
+	isExact, err := d.CheckExactDuplicate(ctx, article)
+	if err != nil {
+		log.Printf("Warning: Redis Bloom check failed: %v", err)
+	}
+	if isExact {
+		log.Printf("Exact duplicate found for article %s (URL/Title)", article.ID)
+		return &DeduplicationResult{
+			IsDuplicate:      true,
+			IsExactDuplicate: true,
+			MatchingID:       article.ID,
+			CheckedAt:        time.Now(),
+		}, nil
+	}
+
+	// 2. Check Vector Duplicates
 	result, err := d.CheckForDuplicates(article)
 	if err != nil {
 		return nil, err
 	}
 
-	// If not a duplicate, add to database
+	// 3. Add to Bloom Filter (regardless of whether it's similar or new, as long as it's not exact duplicate)
+	if err := d.AddExactDuplicate(ctx, article); err != nil {
+		log.Printf("Warning: Failed to add to Bloom Filter: %v", err)
+	}
+
+	// 4. If not duplicate (similar), add to Vector DB
 	if !result.IsDuplicate {
 		err := d.AddArticle(article)
 		if err != nil {
@@ -355,8 +454,27 @@ func (d *Deduplicator) CleanupOldArticles() error {
 	return nil
 }
 
+// ClearBloomFilter clears the Redis Bloom filter keys
+func (d *Deduplicator) ClearBloomFilter(ctx context.Context) error {
+	if d.redis == nil {
+		return nil
+	}
+
+	// Delete the keys
+	keys := []string{"articles:bloom:url", "articles:bloom:title"}
+	if err := d.redis.Del(ctx, keys...).Err(); err != nil {
+		return fmt.Errorf("failed to delete bloom filter keys: %w", err)
+	}
+
+	log.Println("Cleared Redis Bloom filter keys")
+	return nil
+}
+
 // Close closes the deduplicator and cleans up resources
 func (d *Deduplicator) Close() error {
+	if d.redis != nil {
+		d.redis.Close()
+	}
 	return d.vector.Close()
 }
 

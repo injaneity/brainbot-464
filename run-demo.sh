@@ -65,6 +65,20 @@ if ! grep -q '^GOOGLE_API_KEY=' "$GEN_ENV_FILE" || ! grep -q '^FAL_KEY=' "$GEN_E
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 fi
 
+ROOT_ENV_FILE=".env"
+if [ ! -f "$ROOT_ENV_FILE" ]; then
+    echo -e "${RED}Missing root .env file${NC}"
+    echo -e "${YELLOW}Please create .env with S3 and Redis configuration (see .env.example)${NC}"
+    exit 1
+fi
+
+if ! grep -q '^S3_BUCKET=' "$ROOT_ENV_FILE"; then
+    echo -e "${YELLOW}Warning: S3_BUCKET not set in .env${NC}"
+    read -p "Continue? (y/n) " -n 1 -r
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+fi
+
 set -a
 source "$CREATION_ENV_FILE"
 set +a
