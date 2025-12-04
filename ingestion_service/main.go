@@ -213,7 +213,7 @@ func processArticles(articles []*types.Article, deduplicator *deduplication.Dedu
 
 		// Record result based on whether duplicate was found
 		if dedupResult.IsDuplicate {
-			log.Printf("  🔄 DUPLICATE DETECTED (%.2f%% similar to %s)",
+			log.Printf("  DUPLICATE DETECTED (%.2f%% similar to %s)",
 				dedupResult.SimilarityScore*100,
 				dedupResult.MatchingID)
 			results = append(results, ArticleResult{
@@ -222,7 +222,7 @@ func processArticles(articles []*types.Article, deduplicator *deduplication.Dedu
 				DeduplicationResult: dedupResult,
 			})
 		} else {
-			log.Printf("  ✅ NEW ARTICLE - Added to database")
+			log.Printf("  NEW ARTICLE - Added to database")
 			results = append(results, ArticleResult{
 				Article:             article,
 				Status:              "new",

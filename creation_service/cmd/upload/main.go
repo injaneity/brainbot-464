@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("upload failed: %v", err)
 	}
 
-	log.Printf("✅ Uploaded successfully! https://youtube.com/watch?v=%s", videoID)
+	log.Printf("Uploaded successfully! https://youtube.com/watch?v=%s", videoID)
 }
 
 func ensureFileExists(path string) error {
@@ -95,11 +95,11 @@ func defaultDescription(title, source string) string {
 	builder.WriteString(title)
 	builder.WriteString("\n\n")
 	if strings.TrimSpace(source) != "" {
-		builder.WriteString("🔗 Source: ")
+		builder.WriteString("Source: ")
 		builder.WriteString(source)
 		builder.WriteString("\n\n")
 	}
-	builder.WriteString("📱 Follow for daily tech updates!\n")
+	builder.WriteString("Follow for daily tech updates!\n")
 	builder.WriteString("#tech #ai #technology #shorts")
 	return builder.String()
 }

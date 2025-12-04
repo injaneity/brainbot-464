@@ -28,28 +28,28 @@ func NewConsumer(config ConsumerConfig) (*sharedKafka.Consumer, error) {
 		Validate: func(msg *app.VideoInput) bool {
 			// Validate status
 			if msg.Status != "success" {
-				log.Printf("⚠️  Skipping message with status: %s", msg.Status)
+				log.Printf("Skipping message with status: %s", msg.Status)
 				return false
 			}
 
 			// Validate UUID
 			if msg.UUID == "" {
-				log.Printf("❌ Message missing UUID, skipping")
+				log.Printf("Message missing UUID, skipping")
 				return false
 			}
 
 			return true
 		},
 		Process: func(ctx context.Context, msg *app.VideoInput) error {
-			log.Printf("🎬 Processing video: UUID=%s", msg.UUID)
+			log.Printf("Processing video: UUID=%s", msg.UUID)
 
 			// Process video
 			if err := config.Processor.ProcessVideoInput(*msg, false); err != nil {
-				log.Printf("❌ Failed to process video %s: %v", msg.UUID, err)
+				log.Printf("Failed to process video %s: %v", msg.UUID, err)
 				return err // Return error to prevent marking (allow retry)
 			}
 
-			log.Printf("✅ Successfully processed video: UUID=%s", msg.UUID)
+			log.Printf("Successfully processed video: UUID=%s", msg.UUID)
 			return nil
 		},
 		AlwaysMark: true, // Mark validation failures, but not processing failures

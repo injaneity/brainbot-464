@@ -28,18 +28,18 @@ func NewVideoProcessor(backgroundsDir string) (*VideoProcessor, error) {
 	skipUpload := false
 	
 	if err != nil {
-		log.Printf("⚠️  YouTube uploader not initialized (missing credentials): %v", err)
-		log.Println("📹 Running in VIDEO-ONLY mode (no upload)")
+		log.Printf("YouTube uploader not initialized (missing credentials): %v", err)
+		log.Println("Running in VIDEO-ONLY mode (no upload)")
 		skipUpload = true
 	} else {
-		log.Println("✅ YouTube client initialized")
+		log.Println("YouTube client initialized")
 	}
 
 	backgrounds, err := getBackgroundVideos(backgroundsDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load background videos: %w", err)
 	}
-	log.Printf("📹 Found %d background videos", len(backgrounds))
+	log.Printf("Found %d background videos", len(backgrounds))
 
 	return &VideoProcessor{
 		uploader:    uploader,
@@ -65,11 +65,11 @@ func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
 	allFiles := append(jsonFiles, txtFiles...)
 	
 	if len(allFiles) == 0 {
-		log.Println("⚠️  No JSON or TXT files found in input/ directory")
+		log.Println("No JSON or TXT files found in input/ directory")
 		return nil
 	}
 
-	log.Printf("📄 Found %d videos to process", len(allFiles))
+	log.Printf("Found %d videos to process", len(allFiles))
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, config.MaxConcurrentVideos)
@@ -84,7 +84,7 @@ func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
 			defer func() { <-semaphore }()
 
 			if err := p.ProcessSingleVideo(file, idx+1, len(allFiles)); err != nil {
-				log.Printf("❌ Failed to process %s: %v", file, err)
+				log.Printf("Failed to process %s: %v", file, err)
 			}
 
 			if idx < len(jsonFiles)-1 {
@@ -94,13 +94,13 @@ func (p *VideoProcessor) ProcessFromDirectory(inputDir string) error {
 	}
 
 	wg.Wait()
-	log.Println("🎉 All videos processed!")
+	log.Println("All videos processed!")
 	return nil
 }
 
 // ProcessSingleVideo processes a single video from JSON input
 func (p *VideoProcessor) ProcessSingleVideo(jsonFile string, current, total int) error {
-	log.Printf("🎬 [%d/%d] Processing: %s", current, total, filepath.Base(jsonFile))
+	log.Printf("[%d/%d] Processing: %s", current, total, filepath.Base(jsonFile))
 
 	data, err := os.ReadFile(jsonFile)
 	if err != nil {
@@ -122,19 +122,19 @@ func (p *VideoProcessor) ProcessSingleVideo(jsonFile string, current, total int)
 // ProcessVideoInput processes a VideoInput struct and optionally deletes the source file
 func (p *VideoProcessor) ProcessVideoInput(input app.VideoInput, cleanup bool) error {
 	backgroundVideo := p.backgrounds[rand.Intn(len(p.backgrounds))]
-	log.Printf("  🎨 Using background: %s", filepath.Base(backgroundVideo))
+	log.Printf("Using background: %s", filepath.Base(backgroundVideo))
 
 	outputPath := filepath.Join(config.OutputDir, fmt.Sprintf("%s.mp4", input.UUID))
-	log.Printf("  🎥 Creating video...")
+	log.Printf("Creating video...")
 	if err := CreateVideo(input, backgroundVideo, outputPath); err != nil {
 		return fmt.Errorf("video creation failed: %w", err)
 	}
-	log.Printf("  ✅ Video created: %s", outputPath)
+	log.Printf("Video created: %s", outputPath)
 
 	// Skip upload if credentials not configured
 	if p.skipUpload {
-		log.Printf("  ⏭️  Skipping YouTube upload (no credentials)")
-		log.Printf("  🎉 SUCCESS! Video saved: %s", outputPath)
+		log.Printf("Skipping YouTube upload (no credentials)")
+		log.Printf("SUCCESS! Video saved: %s", outputPath)
 		return nil
 	}
 
@@ -152,13 +152,13 @@ func (p *VideoProcessor) ProcessVideoInput(input app.VideoInput, cleanup bool) e
 
 	metadata := GenerateMetadata(input, articleTitle, sourceURL)
 
-	log.Printf("  📤 Uploading to YouTube...")
+	log.Printf("Uploading to YouTube...")
 	videoID, err := p.uploader.UploadVideo(outputPath, metadata)
 	if err != nil {
 		return fmt.Errorf("upload failed: %w", err)
 	}
 
-	log.Printf("  🎉 SUCCESS! Video ID: %s", videoID)
+	log.Printf("SUCCESS! Video ID: %s", videoID)
 
 	// Optional: cleanup can be disabled for API processing
 	if cleanup {

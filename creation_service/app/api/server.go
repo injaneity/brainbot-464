@@ -58,12 +58,12 @@ func (s *Server) HandleProcessVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("📥 Received video processing request: UUID=%s", req.UUID)
+	log.Printf("Received video processing request: UUID=%s", req.UUID)
 
 	// Process video asynchronously (non-blocking for API response)
 	go func() {
 		if err := s.processor.ProcessVideoInput(req.VideoInput, false); err != nil {
-			log.Printf("❌ Video processing failed for UUID %s: %v", req.UUID, err)
+			log.Printf("Video processing failed for UUID %s: %v", req.UUID, err)
 		}
 	}()
 
@@ -93,7 +93,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, message string, err
 
 	if err != nil {
 		response.Error = err.Error()
-		log.Printf("❌ API Error: %s - %v", message, err)
+		log.Printf("API Error: %s - %v", message, err)
 	}
 
 	json.NewEncoder(w).Encode(response)

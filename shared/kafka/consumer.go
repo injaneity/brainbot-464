@@ -84,12 +84,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}()
 
 	<-c.ready
-	log.Printf("✅ Kafka consumer started (group: %s, topic: %s)", c.groupID, c.topic)
+	log.Printf("Kafka consumer started (group: %s, topic: %s)", c.groupID, c.topic)
 
 	// Handle errors
 	go func() {
 		for err := range c.consumer.Errors() {
-			log.Printf("❌ Kafka consumer error: %v", err)
+			log.Printf("Kafka consumer error: %v", err)
 		}
 	}()
 
@@ -129,13 +129,13 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				return nil
 			}
 
-			log.Printf("📥 Received Kafka message: partition=%d, offset=%d, key=%s",
+			log.Printf("Received Kafka message: partition=%d, offset=%d, key=%s",
 				message.Partition, message.Offset, string(message.Key))
 
 			// Delegate to custom handler
 			shouldMark, err := h.messageHandler.HandleMessage(session.Context(), message.Value)
 			if err != nil {
-				log.Printf("❌ Failed to handle message: %v", err)
+				log.Printf("Failed to handle message: %v", err)
 			}
 
 			// Mark message if handler indicates success
@@ -164,7 +164,7 @@ type TypedMessageHandler[T any] struct {
 func (h *TypedMessageHandler[T]) HandleMessage(ctx context.Context, message []byte) (bool, error) {
 	var msg T
 	if err := json.Unmarshal(message, &msg); err != nil {
-		log.Printf("❌ Failed to unmarshal message: %v", err)
+		log.Printf("Failed to unmarshal message: %v", err)
 		return h.AlwaysMark, nil // Mark to skip invalid messages
 	}
 
