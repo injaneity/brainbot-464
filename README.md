@@ -2,7 +2,7 @@
 
 Automated RSS-to-YouTube pipeline using AI. Fetches articles, generates video content, and publishes to YouTube.
 
-## 🎯 Quick Start
+## Quick Start
 
 ### Docker Mode (Recommended)
 
@@ -28,7 +28,7 @@ Press `d` in the demo to start processing!
 ./run-demo.sh
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Docker & Docker Compose
 - Go 1.24+
@@ -39,7 +39,7 @@ Press `d` in the demo to start processing!
   - **YouTube OAuth** - For uploading (see [creation_service/README.md](creation_service/README.md))
   - **Cohere or OpenAI** - For embeddings (deduplication)
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -57,24 +57,24 @@ Press `d` in the demo to start processing!
 ┌─────────────────────────────────────────────────────────────┐
 │                   Application Services                       │
 │                                                              │
-│  📥 ingestion_service (:8080)                               │
+│     ingestion_service (:8080)                               │
 │     • Fetches RSS feeds                                     │
 │     • Extracts article content                              │
 │     • Deduplicates via Redis (Bloom) & ChromaDB             │
 │     • Stores content in S3                                  │
 │                  ↓                                           │
-│  🤖 generation_service (:8002)                              │
+│     generation_service (:8002)                              │
 │     • Generates video scripts (Gemini)                      │
 │     • Creates videos & audio (FAL.ai)                       │
 │     • Publishes to Kafka                                    │
 │                  ↓                                           │
-│  📤 creation_service (Kafka Consumer)                       │
+│     creation_service (Kafka Consumer)                       │
 │     • Processes videos with FFmpeg                          │
 │     • Uploads to YouTube                                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 brainbot-464/
@@ -91,7 +91,7 @@ See individual service READMEs for details:
 - [generation_service/README.md](generation_service/README.md)
 - [creation_service/README.md](creation_service/README.md)
 
-## 🔧 Setup Instructions
+## Setup Instructions
 
 ### 1. Clone & Install Dependencies
 
@@ -162,7 +162,7 @@ The generation service classifies each article into one of those topics, so uplo
 
 Press 'd' in the demo to start processing!
 
-## 🎮 Demo Instructions
+## Demo Instructions
 
 Once services are running:
 
@@ -183,7 +183,7 @@ Once services are running:
 - **Progress Tracking** - See each step in the pipeline
 - **Error Handling** - Clear error messages if something fails
 
-## 🐳 Docker Commands
+## Docker Commands
 
 ```bash
 # Start all services
@@ -210,7 +210,7 @@ docker-compose up -d
 docker-compose down -v
 ```
 
-## 🛠️ Development
+## Development
 
 ### Build Services
 
@@ -267,7 +267,7 @@ cd generation_service
 pytest app/tests/
 ```
 
-## 📊 Service Endpoints
+## Service Endpoints
 
 | Service | Port | Health Check | Purpose |
 |---------|------|--------------|---------|
@@ -307,7 +307,7 @@ curl -X POST http://localhost:8002/generate \
   }'
 ```
 
-## 🔍 Monitoring & Debugging
+## Monitoring & Debugging
 
 ### View Logs
 
@@ -385,7 +385,7 @@ rm -rf chroma_data/*
 docker-compose up -d chromadb
 ```
 
-## 📚 Service Details
+## Service Details
 
 ### Ingestion Service
 
@@ -417,13 +417,13 @@ Video processing and upload:
 
 See [creation_service/README.md](creation_service/README.md) for details.
 
-## 🔐 Security
+## Security
 
 - **Never commit credentials** - All secrets are in `.env` or `.secrets/` (gitignored)
 - **YouTube OAuth tokens** - Stored in `creation_service/.secrets/youtube.env`
 - **API keys** - Loaded from environment variables only
 - **Docker secrets** - Use environment variables or Docker secrets in production
 
-## 📝 License
+## License
 
 See [LICENSE](LICENSE) file for details.

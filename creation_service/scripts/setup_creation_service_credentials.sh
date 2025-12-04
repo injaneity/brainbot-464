@@ -164,6 +164,6 @@ env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 PY
 
 echo
-echo "✅ OAuth credentials are ready."
+echo "OAuth credentials are ready."
 echo "- Token cache: $TOKEN_JSON"
 echo "- Env file:    $ENV_FILE (slot $ACCOUNT_SLOT)"

@@ -128,7 +128,7 @@ func (u *Uploader) UploadVideo(videoPath string, metadata app.VideoMetadata) (st
 		return "", fmt.Errorf("failed to stat video file: %w", err)
 	}
 
-	log.Printf("📤 Uploading: %s (%.2f MB)", videoPath, float64(fileInfo.Size())/(1024*1024))
+	log.Printf("Uploading: %s (%.2f MB)", videoPath, float64(fileInfo.Size())/(1024*1024))
 
 	video := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
@@ -152,7 +152,7 @@ func (u *Uploader) UploadVideo(videoPath string, metadata app.VideoMetadata) (st
 	}
 
 	videoID := response.Id
-	log.Printf("✅ Uploaded! https://youtube.com/shorts/%s", videoID)
+	log.Printf("Uploaded! https://youtube.com/shorts/%s", videoID)
 
 	return videoID, nil
 }
@@ -164,8 +164,8 @@ func GenerateMetadata(input app.VideoInput, articleTitle string, sourceURL strin
 	}
 
 	description := fmt.Sprintf(
-		"🔗 Source: %s\n\n"+
-			"📱 Follow for daily tech updates!\n"+
+		"Source: %s\n\n"+
+			"Follow for daily tech updates!\n"+
 			"#tech #ai #technology #shorts",
 		sourceURL,
 	)
