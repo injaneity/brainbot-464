@@ -130,10 +130,20 @@ OPENAI_API_KEY=your_openai_key
 
 ```bash
 cd creation_service/scripts
-./setup_creation_service_credentials.sh
+./setup_creation_service_credentials.sh --slot 1 --client-secret client_secret.json
 ```
 
-This will guide you through YouTube OAuth setup and create `creation_service/.secrets/youtube.env`.
+Run the same command with `--slot 2`, `--slot 3`, etc. (and their corresponding `client_secret_X.json` files) to register additional channels. The script keeps `.secrets/youtube.env` up to date with per-slot secrets plus a `YOUTUBE_ACCOUNT_SLOT` default, so you only need to flip that value to switch accounts.
+
+When you later start the stack via Docker, three creation-service containers spin up automatically, each pinned to one of those slots and listening to a dedicated Kafka topic:
+
+| Service | Kafka topic | Consumer group | YouTube slot | Output dir |
+|---------|-------------|----------------|--------------|------------|
+| `creation-service-tech` | `video-requests-tech` | `creation-service-tech` | 1 | `creation_service/outputs/tech` |
+| `creation-service-finance` | `video-requests-finance` | `creation-service-finance` | 2 | `creation_service/outputs/finance` |
+| `creation-service-other` | `video-requests-other` | `creation-service-other` | 3 | `creation_service/outputs/other` |
+
+The generation service classifies each article into one of those topics, so uploads automatically land in the matching YouTube account.
 
 ### 4. Start Services
 
@@ -180,7 +190,9 @@ docker-compose logs -f
 # View logs (specific service)
 docker-compose logs -f ingestion-service
 docker-compose logs -f generation-service
-docker-compose logs -f creation-service
+docker-compose logs -f creation-service-tech
+docker-compose logs -f creation-service-finance
+docker-compose logs -f creation-service-other
 
 # Stop services
 docker-compose down
@@ -226,6 +238,7 @@ python -m app.main
 # Creation service (Kafka consumer mode)
 cd creation_service
 source .secrets/youtube.env
+export YOUTUBE_ACCOUNT_SLOT=1   # set to 2/3/etc to pick another channel
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9093
 go run main.go -kafka
 

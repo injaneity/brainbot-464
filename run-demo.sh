@@ -65,9 +65,19 @@ if ! grep -q '^GOOGLE_API_KEY=' "$GEN_ENV_FILE" || ! grep -q '^FAL_KEY=' "$GEN_E
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 fi
 
+USER_REQUESTED_SLOT="${YOUTUBE_ACCOUNT_SLOT:-}"
 set -a
 source "$CREATION_ENV_FILE"
 set +a
+if [[ -n "$USER_REQUESTED_SLOT" && "$USER_REQUESTED_SLOT" != "${YOUTUBE_ACCOUNT_SLOT:-}" ]]; then
+    echo -e "${YELLOW}Host YOUTUBE_ACCOUNT_SLOT=${USER_REQUESTED_SLOT} differs from .secrets value (${YOUTUBE_ACCOUNT_SLOT:-unset}). Containers use the .secrets value; run the setup script with --slot to switch.${NC}"
+fi
+if [[ -z "${YOUTUBE_ACCOUNT_SLOT:-}" ]]; then
+    export YOUTUBE_ACCOUNT_SLOT="1"
+else
+    export YOUTUBE_ACCOUNT_SLOT
+fi
+echo -e "${GREEN}Using YouTube account slot:${NC} ${YELLOW}${YOUTUBE_ACCOUNT_SLOT}${NC}"
 
 # Check if orchestrator is already running
 ORCHESTRATOR_RUNNING=$(docker ps -q -f name=brainbot-orchestrator 2>/dev/null)

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"brainbot/creation_service/app"
 
@@ -22,6 +24,7 @@ const (
 	envYouTubeClientID     = "YOUTUBE_CLIENT_ID"
 	envYouTubeClientSecret = "YOUTUBE_CLIENT_SECRET"
 	envYouTubeRefreshToken = "YOUTUBE_REFRESH_TOKEN"
+	envYouTubeAccountSlot  = "YOUTUBE_ACCOUNT_SLOT"
 )
 
 type oauthCredentials struct {
@@ -31,28 +34,60 @@ type oauthCredentials struct {
 }
 
 func loadOAuthCredentials() (oauthCredentials, error) {
+	slot := strings.TrimSpace(os.Getenv(envYouTubeAccountSlot))
+	if slot != "" {
+		return loadSlotCredentials(slot)
+	}
+	return loadLegacyCredentials()
+}
+
+func loadSlotCredentials(slot string) (oauthCredentials, error) {
+	if _, err := strconv.Atoi(slot); err != nil || slot == "0" {
+		return oauthCredentials{}, fmt.Errorf("invalid %s %q: must be a positive integer", envYouTubeAccountSlot, slot)
+	}
+	suffix := fmt.Sprintf("_%s", slot)
+	creds := oauthCredentials{
+		ClientID:     os.Getenv(envYouTubeClientID + suffix),
+		ClientSecret: os.Getenv(envYouTubeClientSecret + suffix),
+		RefreshToken: os.Getenv(envYouTubeRefreshToken + suffix),
+	}
+
+	missing := missingEnvKeys(map[string]string{
+		envYouTubeClientID + suffix:     creds.ClientID,
+		envYouTubeClientSecret + suffix: creds.ClientSecret,
+		envYouTubeRefreshToken + suffix: creds.RefreshToken,
+	})
+	if len(missing) > 0 {
+		return oauthCredentials{}, fmt.Errorf("missing required env vars for slot %s: %v", slot, missing)
+	}
+	return creds, nil
+}
+
+func loadLegacyCredentials() (oauthCredentials, error) {
 	creds := oauthCredentials{
 		ClientID:     os.Getenv(envYouTubeClientID),
 		ClientSecret: os.Getenv(envYouTubeClientSecret),
 		RefreshToken: os.Getenv(envYouTubeRefreshToken),
 	}
-
-	missing := make([]string, 0, 3)
-	if creds.ClientID == "" {
-		missing = append(missing, envYouTubeClientID)
-	}
-	if creds.ClientSecret == "" {
-		missing = append(missing, envYouTubeClientSecret)
-	}
-	if creds.RefreshToken == "" {
-		missing = append(missing, envYouTubeRefreshToken)
-	}
-
+	missing := missingEnvKeys(map[string]string{
+		envYouTubeClientID:     creds.ClientID,
+		envYouTubeClientSecret: creds.ClientSecret,
+		envYouTubeRefreshToken: creds.RefreshToken,
+	})
 	if len(missing) > 0 {
 		return oauthCredentials{}, fmt.Errorf("missing required env vars: %v", missing)
 	}
-
 	return creds, nil
+}
+
+func missingEnvKeys(values map[string]string) []string {
+	missing := make([]string, 0, len(values))
+	for key, val := range values {
+		if strings.TrimSpace(val) == "" {
+			missing = append(missing, key)
+		}
+	}
+	return missing
 }
 
 func NewUploader() (*Uploader, error) {
