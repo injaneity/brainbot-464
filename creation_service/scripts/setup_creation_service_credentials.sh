@@ -115,6 +115,6 @@ PY
 fi
 
 echo
-echo "✅ OAuth credentials are ready."
+echo "OAuth credentials are ready."
 echo "- Token cache: $TOKEN_JSON"
 echo "- Env file:    $ENV_FILE"

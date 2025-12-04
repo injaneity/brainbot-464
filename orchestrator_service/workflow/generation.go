@@ -20,22 +20,24 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 
 	results := r.stateManager.GetDedupResults()
 
-	// Collect article texts
-	var articleTexts []string
+	// Find presigned URL from first new article and collect article URLs
+	var presignedURL string
 	var articleURLs []string
 	for _, res := range results {
-		if res.Status == "new" && res.Article != nil {
-			text := res.Article.FullContentText
-			if text == "" {
-				text = res.Article.Summary
+		if res.Status == "new" {
+			// Get presigned URL from first new article
+			if presignedURL == "" && res.PresignedURL != "" {
+				presignedURL = res.PresignedURL
 			}
-			articleTexts = append(articleTexts, text)
-			articleURLs = append(articleURLs, res.Article.URL)
+			// Collect article URLs
+			if res.Article != nil {
+				articleURLs = append(articleURLs, res.Article.URL)
+			}
 		}
 	}
 
-	if len(articleTexts) == 0 {
-		r.stateManager.AddLog("No new articles to send for generation. Workflow complete.")
+	if presignedURL == "" {
+		r.stateManager.AddLog("No presigned URL available for new articles. Workflow complete.")
 		r.stateManager.SetState(types.StateComplete)
 		return nil
 	}
@@ -43,9 +45,13 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	reqUUID := uuid.New().String()
 
 	requestBody := map[string]interface{}{
-		"uuid":         reqUUID,
-		"articles":     articleTexts,
-		"article_urls": articleURLs,
+		"uuid":          reqUUID,
+		"presigned_url": presignedURL,
+	}
+
+	// Add article URLs if available (optional field in schema)
+	if len(articleURLs) > 0 {
+		requestBody["article_urls"] = articleURLs
 	}
 
 	jsonData, err := json.Marshal(requestBody)

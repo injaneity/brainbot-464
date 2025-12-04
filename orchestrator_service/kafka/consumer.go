@@ -27,7 +27,7 @@ func NewConsumer(config ConsumerConfig) (*sharedKafka.Consumer, error) {
 	handler := &sharedKafka.TypedMessageHandler[types.WebhookPayload]{
 		Validate: func(msg *types.WebhookPayload) bool {
 			if msg.UUID == "" {
-				log.Printf("❌ Message missing UUID, skipping")
+				log.Printf("Message missing UUID, skipping")
 				return false
 			}
 			return true
@@ -36,7 +36,7 @@ func NewConsumer(config ConsumerConfig) (*sharedKafka.Consumer, error) {
 			// Note: We process both "success" and "failure" statuses here
 			// to update the orchestrator state accordingly.
 			config.StateManager.SetWebhookPayload(msg)
-			log.Printf("✅ State updated from Kafka message for UUID: %s (Status: %s)", msg.UUID, msg.Status)
+			log.Printf("State updated from Kafka message for UUID: %s (Status: %s)", msg.UUID, msg.Status)
 			return nil
 		},
 		AlwaysMark: true, // Always mark messages, even validation failures
