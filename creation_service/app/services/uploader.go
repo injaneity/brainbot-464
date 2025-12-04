@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -42,7 +43,8 @@ func loadOAuthCredentials() (oauthCredentials, error) {
 }
 
 func loadSlotCredentials(slot string) (oauthCredentials, error) {
-	if _, err := strconv.Atoi(slot); err != nil || slot == "0" {
+	n, err := strconv.Atoi(slot)
+	if err != nil || n <= 0 {
 		return oauthCredentials{}, fmt.Errorf("invalid %s %q: must be a positive integer", envYouTubeAccountSlot, slot)
 	}
 	suffix := fmt.Sprintf("_%s", slot)
@@ -87,6 +89,7 @@ func missingEnvKeys(values map[string]string) []string {
 			missing = append(missing, key)
 		}
 	}
+	sort.Strings(missing)
 	return missing
 }
 

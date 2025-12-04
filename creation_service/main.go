@@ -112,10 +112,11 @@ func loadEnvOrFallback() {
 			continue
 		}
 
-		if err := godotenv.Overload(clean); err != nil {
+		if err := godotenv.Load(clean); err != nil {
 			log.Printf("Failed to load env file %s: %v", clean, err)
 			continue
 		}
 		log.Printf("Loaded environment variables from %s", clean)
+		break
 	}
 }
