@@ -15,6 +15,7 @@ type VideoInput struct {
 	Error              *string             `json:"error"`
 	Title              string              `json:"title,omitempty"`
 	SourceURL          string              `json:"source_url,omitempty"`
+	ArticleURLs        []string            `json:"article_urls,omitempty"`
 }
 
 type VideoMetadata struct {
