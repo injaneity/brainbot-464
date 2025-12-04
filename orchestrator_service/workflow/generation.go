@@ -22,6 +22,7 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 
 	// Collect article texts
 	var articleTexts []string
+	var articleURLs []string
 	for _, res := range results {
 		if res.Status == "new" && res.Article != nil {
 			text := res.Article.FullContentText
@@ -29,6 +30,7 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 				text = res.Article.Summary
 			}
 			articleTexts = append(articleTexts, text)
+			articleURLs = append(articleURLs, res.Article.URL)
 		}
 	}
 
@@ -41,8 +43,9 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	reqUUID := uuid.New().String()
 
 	requestBody := map[string]interface{}{
-		"uuid":     reqUUID,
-		"articles": articleTexts,
+		"uuid":         reqUUID,
+		"articles":     articleTexts,
+		"article_urls": articleURLs,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
