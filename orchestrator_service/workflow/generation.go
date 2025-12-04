@@ -20,12 +20,19 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 
 	results := r.stateManager.GetDedupResults()
 
-	// Find presigned URL from first new article
+	// Find presigned URL from first new article and collect article URLs
 	var presignedURL string
+	var articleURLs []string
 	for _, res := range results {
-		if res.Status == "new" && res.PresignedURL != "" {
-			presignedURL = res.PresignedURL
-			break
+		if res.Status == "new" {
+			// Get presigned URL from first new article
+			if presignedURL == "" && res.PresignedURL != "" {
+				presignedURL = res.PresignedURL
+			}
+			// Collect article URLs
+			if res.Article != nil {
+				articleURLs = append(articleURLs, res.Article.URL)
+			}
 		}
 	}
 
@@ -40,6 +47,11 @@ func (r *Runner) sendGenerationRequest(ctx context.Context) error {
 	requestBody := map[string]interface{}{
 		"uuid":          reqUUID,
 		"presigned_url": presignedURL,
+	}
+
+	// Add article URLs if available (optional field in schema)
+	if len(articleURLs) > 0 {
+		requestBody["article_urls"] = articleURLs
 	}
 
 	jsonData, err := json.Marshal(requestBody)
