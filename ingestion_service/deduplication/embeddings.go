@@ -3,7 +3,6 @@ package deduplication
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,18 +32,7 @@ func NewDefaultEmbeddingsProvider(preferredModel string) EmbeddingsProvider {
 			// Reasonable default for Cohere v3 embeddings; choose english by default
 			model = "embed-english-v3.0"
 		}
-		// Create a custom HTTP client that forces HTTP/1.1 to avoid HTTP/2 protocol errors
-		httpClient := &http.Client{
-			Timeout: 60 * time.Second,
-			Transport: &http.Transport{
-				TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-				ForceAttemptHTTP2: false,
-			},
-		}
-		client := cohereclient.NewClient(
-			cohereclient.WithToken(cohereKey),
-			cohereclient.WithHTTPClient(httpClient),
-		)
+		client := cohereclient.NewClient(cohereclient.WithToken(cohereKey))
 		return &CohereEmbeddings{client: client, model: model}
 	}
 
