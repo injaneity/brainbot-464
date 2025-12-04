@@ -65,9 +65,6 @@ if ! grep -q '^GOOGLE_API_KEY=' "$GEN_ENV_FILE" || ! grep -q '^FAL_KEY=' "$GEN_E
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 fi
 
-    exit 1
-fi
-
 ROOT_ENV_FILE=".env"
 if [ ! -f "$ROOT_ENV_FILE" ]; then
     echo -e "${RED}Missing root .env file${NC}"
