@@ -158,8 +158,18 @@ env_path.parent.mkdir(parents=True, exist_ok=True)
 new_lines = existing_lines
 if new_lines and new_lines[-1].strip():
   new_lines.append("")
-for key in sorted(updates.keys()):
-  new_lines.append(f'{key}="{updates[key]}"')
+ordered_keys = [
+  f"YOUTUBE_CLIENT_ID_{slot}",
+  f"YOUTUBE_CLIENT_SECRET_{slot}",
+  f"YOUTUBE_REFRESH_TOKEN_{slot}",
+  "YOUTUBE_CLIENT_ID",
+  "YOUTUBE_CLIENT_SECRET",
+  "YOUTUBE_REFRESH_TOKEN",
+  "YOUTUBE_ACCOUNT_SLOT",
+]
+for key in ordered_keys:
+  if key in updates:
+    new_lines.append(f'{key}="{updates[key]}"')
 
 env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 PY

@@ -42,11 +42,11 @@ func CreateVideo(input app.VideoInput, backgroundVideoPath string, outputPath st
 	// Crop and scale video to 9:16 vertical format (center crop for horizontal videos)
 	// This ensures the output is always vertical, even if background is horizontal
 	videoCropped := ffmpeg.Filter(
-		[]*ffmpeg.Stream{video}, 
-		"crop", 
+		[]*ffmpeg.Stream{video},
+		"crop",
 		ffmpeg.Args{fmt.Sprintf("ih*9/16:ih")}, // Crop to 9:16 aspect ratio from center
 	).Filter(
-		"scale", 
+		"scale",
 		ffmpeg.Args{fmt.Sprintf("%d:%d", config.VideoWidth, config.VideoHeight)}, // Scale to target size
 	)
 
@@ -105,15 +105,15 @@ type Sentence struct {
 func groupIntoSentences(timestamps []app.SubtitleTimestamp, maxWordsPerLine int) []Sentence {
 	sentences := []Sentence{}
 	currentSentence := Sentence{Words: []app.SubtitleTimestamp{}}
-	
+
 	for i, ts := range timestamps {
 		currentSentence.Words = append(currentSentence.Words, ts)
-		
+
 		if currentSentence.Start == 0 {
 			currentSentence.Start = ts.Start
 		}
 		currentSentence.End = ts.End
-		
+
 		// Check if this word ends with a period (sentence end)
 		// Ignore periods that are part of numbers like "4.5"
 		endsWithPeriod := false
@@ -140,16 +140,16 @@ func groupIntoSentences(timestamps []app.SubtitleTimestamp, maxWordsPerLine int)
 				endsWithPeriod = true
 			}
 		}
-		
+
 		// Split if sentence ends OR if max words reached OR if it's the last word
 		shouldSplit := endsWithPeriod || len(currentSentence.Words) >= maxWordsPerLine || i == len(timestamps)-1
-		
+
 		if shouldSplit && len(currentSentence.Words) > 0 {
 			sentences = append(sentences, currentSentence)
 			currentSentence = Sentence{Words: []app.SubtitleTimestamp{}}
 		}
 	}
-	
+
 	return sentences
 }
 
@@ -160,7 +160,7 @@ func generateASS(timestamps []app.SubtitleTimestamp, outputPath string) error {
 		return err
 	}
 	defer file.Close()
-	
+
 	// ASS Header
 	fmt.Fprintln(file, "[Script Info]")
 	fmt.Fprintln(file, "Title: Brainbot Video")
@@ -170,28 +170,28 @@ func generateASS(timestamps []app.SubtitleTimestamp, outputPath string) error {
 	fmt.Fprintln(file, "")
 	fmt.Fprintln(file, "[V4+ Styles]")
 	fmt.Fprintln(file, "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
-	
+
 	// White text style (default/unhighlighted)
 	// MarginV=768 positions subtitles at 40% from bottom (1920px * 0.4 = 768px)
 	fmt.Fprintf(file, "Style: Default,Consolas,%d,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,2,40,40,768,1\n", config.SubtitleFontSize)
-	
+
 	// Yellow highlighted text style
 	fmt.Fprintf(file, "Style: Highlight,Consolas,%d,&H0000FFFF,&H0000FFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,2,40,40,768,1\n", config.SubtitleFontSize)
-	
+
 	fmt.Fprintln(file, "")
 	fmt.Fprintln(file, "[Events]")
 	fmt.Fprintln(file, "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
-	
+
 	// Group words into sentences with max words per line from config
 	sentences := groupIntoSentences(timestamps, config.SubtitleMaxWordsLine)
-	
+
 	// Generate subtitle events for each sentence
 	for _, sentence := range sentences {
 		// For each word timing in the sentence, create a subtitle event
 		for wordIdx := range sentence.Words {
 			startTime := sentence.Start
 			endTime := sentence.End
-			
+
 			// Build the subtitle text with word-by-word highlighting
 			var textParts []string
 			for i, word := range sentence.Words {
@@ -203,24 +203,24 @@ func generateASS(timestamps []app.SubtitleTimestamp, outputPath string) error {
 					textParts = append(textParts, word.Text)
 				}
 			}
-			
+
 			text := strings.Join(textParts, " ")
-			
+
 			// Use the actual word's timing
-				startTime = sentence.Words[wordIdx].Start
-				if wordIdx < len(sentence.Words)-1 {
-					endTime = sentence.Words[wordIdx+1].Start
-				} else {
-					endTime = sentence.Words[wordIdx].End
-				}
-			
+			startTime = sentence.Words[wordIdx].Start
+			if wordIdx < len(sentence.Words)-1 {
+				endTime = sentence.Words[wordIdx+1].Start
+			} else {
+				endTime = sentence.Words[wordIdx].End
+			}
+
 			fmt.Fprintf(file, "Dialogue: 0,%s,%s,Default,,0,0,0,,%s\n",
 				formatASSTimestamp(startTime),
 				formatASSTimestamp(endTime),
 				text)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -230,7 +230,7 @@ func formatASSTimestamp(seconds float64) string {
 	minutes := int((seconds - float64(hours*3600)) / 60)
 	secs := int(seconds) % 60
 	centisecs := int((seconds - float64(int(seconds))) * 100)
-	
+
 	return fmt.Sprintf("%d:%02d:%02d.%02d", hours, minutes, secs, centisecs)
 }
 
